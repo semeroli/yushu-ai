@@ -159,7 +159,7 @@ export const AIPortal: React.FC = () => {
       <div className="max-w-5xl mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-6">
           <div className="text-left">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-4 border border-emerald-500/20">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-4 border border-emerald-500/20">
               Intelligent Workspace
             </div>
             <h2 className="text-2xl md:text-5xl font-bold">语枢 <span className="text-emerald-500">智慧工作台</span></h2>
@@ -170,8 +170,8 @@ export const AIPortal: React.FC = () => {
               onClick={toggleExpertMode}
               className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border transition-all text-xs md:text-sm font-bold w-full md:w-auto ${
                 isExpertMode 
-                ? 'bg-purple-600/20 border-purple-500 text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' 
-                : 'bg-white/5 border-white/10 text-white/40 hover:text-white'
+                ? 'bg-purple-600/20 border-purple-500 text-purple-600 dark:text-purple-400 shadow-[0_0_20px_rgba(168,85,247,0.2)]' 
+                : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-ink/40 dark:text-white/40 hover:text-ink dark:hover:text-white'
               }`}
             >
               {isExpertMode ? <ShieldCheck className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
@@ -193,7 +193,7 @@ export const AIPortal: React.FC = () => {
               className={`flex items-center gap-2 px-3 py-2 md:px-4 md:py-2 rounded-xl border transition-all shrink-0 ${
                 activeTool === tool.id 
                 ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg shadow-emerald-600/20' 
-                : 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10'
+                : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-ink/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/10'
               }`}
             >
               <span className={activeTool === tool.id ? 'text-white' : tool.color}>{tool.icon}</span>
