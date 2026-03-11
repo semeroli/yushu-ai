@@ -18,3 +18,4 @@ View your app in AI Studio: https://ai.studio/apps/44ea64f9-3cbe-4ed5-a144-a86b4
 2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
 3. Run the app:
    `npm run dev`
+4. 修改按钮底色
