@@ -1,0 +1,46 @@
+.md-h {
+  font-weight: 600;
+  margin-top: 1.5em;
+  margin-bottom: 0.6em;
+  color: #e2e8f0;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 0.3em;
+}
+
+.md-p {
+  margin: 0.8em 0;
+  line-height: 1.9;
+  color: #cbd5e1;
+  text-align: justify;
+}
+
+.md-li {
+  margin: 0.4em 0;
+  padding-left: 1em;
+  position: relative;
+  color: #cbd5e1;
+}
+
+.md-li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.65em;
+  width: 6px;
+  height: 6px;
+  background: #60a5fa;
+  border-radius: 50%;
+}
+
+.md-hr {
+  border: none;
+  border-top: 1px solid #334155;
+  margin: 1.5em 0;
+}
+
+.md-error {
+  color: #f87171;
+  padding: 1em;
+  background: #450a0a;
+  border-radius: 0.5em;
+}
