@@ -1,3 +1,4 @@
+import { marked } from 'marked';
 import { ImagePart } from "@google/genai";
 
 export type ToolType = "general" | "ancient" | "essay" | "lesson" | "reading" | "poetry";
@@ -12,6 +13,9 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 };
 
 export class GeminiService {
+  /**
+   * 生成教学资源（支持流式 + 多模态 + 专家模式）
+   */
   async generateTeachingResource(
     prompt: string,
     type: ToolType = "general",
@@ -19,26 +23,78 @@ export class GeminiService {
     imagesBase64?: string[]
   ): Promise<string> {
     try {
-      const res = await fetch("/api/generate", {
+      // ✅ 构造图片内容
+      const contentParts: any[] = [];
+
+      if (imagesBase64 && imagesBase64.length > 0) {
+        imagesBase64.forEach(img => {
+          const base64Data = img.split(',')[1];
+          const mimeType = img.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
+          contentParts.push({
+            type: "image_url",
+            image_url: {
+              url: `data:${mimeType};base64,${base64Data}`
+            }
+          });
+        });
+      }
+
+      contentParts.push({
+        type: "text",
+        text: prompt
+      });
+
+      // ✅ 调用后端代理
+      const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
-          systemPrompt: TOOL_PROMPTS[type],
+          prompt: contentParts,
+          systemPrompt: TOOL_PROMPTS[type], // ✅ 保留你的角色设定
           isPro,
-          images: imagesBase64,
         }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        if (err.error?.includes("KEY")) return "ERROR_KEY_INVALID";
-        throw new Error(err.error || "请求失败");
+      if (!response.ok) {
+        return '<p style="color:red;">语枢智能服务暂时不可用，请稍后再试。</p>';
       }
 
-      return await res.text();
-    } catch (e) {
-      return "语枢智能服务暂时无法处理，请稍后重试。";
+      // ✅ 流式解析（核心修复点）
+      const reader = response.body!.getReader();
+      const decoder = new TextDecoder("utf-8");
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split("\n").filter(Boolean);
+
+        for (const line of lines) {
+          if (!line.startsWith("data:")) continue;
+
+          const jsonStr = line.replace("data:", "").trim();
+          if (jsonStr === "[DONE]") continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              fullText += content;
+            }
+          } catch {
+            // 忽略单行解析错误
+          }
+        }
+      }
+
+      // ✅ 转成 Markdown HTML
+      return marked.parse(fullText);
+
+    } catch (error) {
+      console.error("GeminiService Error:", error);
+      return '<p style="color:red;">请求失败，请检查网络连接。</p>';
     }
   }
 }
