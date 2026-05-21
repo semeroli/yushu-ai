@@ -11,15 +11,21 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 
 export class GeminiService {
   /**
-   * 生成教学资源（DeepSeek-V4-Pro / ModelScope）
+   * 生成教学资源（DeepSeek-V4-Pro / ModelScope / CF Pages Env）
    */
   async generateTeachingResource(
+    context: any,
     prompt: string,
     type: ToolType = 'general',
     isPro: boolean = false,
     imagesBase64?: string[]
   ): Promise<string> {
     try {
+      const apiKey = context.env.MODELSCOPE_API_KEY;
+      if (!apiKey) {
+        return "ERROR_KEY_INVALID";
+      }
+
       const systemInst = TOOL_PROMPTS[type] + " 请使用清晰的 Markdown 格式输出。";
 
       const contentParts: any[] = [];
@@ -42,7 +48,7 @@ export class GeminiService {
       contentParts.push({ text: textPrompt });
 
       const payload = {
-        model: 'deepseek-ai/DeepSeek-V4-Pro', // ✅ 魔塔模型
+        model: 'deepseek-ai/DeepSeek-V4-Pro',
         messages: [
           { role: 'system', content: systemInst },
           { role: 'user', content: contentParts }
@@ -55,7 +61,7 @@ export class GeminiService {
       const response = await fetch('https://api-inference.modelscope.cn/v1/chat/completions', {
         method: 'POST',
         headers: {
-          'Authorization': 'Bearer ms-04430a72-e2cc-477c-9191-9d1abc36f3bd', // ✅ 魔塔 Key
+          'Authorization': `Bearer ${apiKey}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
@@ -63,9 +69,7 @@ export class GeminiService {
 
       if (!response.ok) {
         const err = await response.json();
-        if (err.error?.message?.includes('key') || response.status === 401) {
-          return 'ERROR_KEY_INVALID';
-        }
+        if (response.status === 401) return "ERROR_KEY_INVALID";
         throw new Error(err.error?.message || '请求失败');
       }
 
