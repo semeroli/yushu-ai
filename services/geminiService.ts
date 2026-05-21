@@ -23,43 +23,29 @@ export class GeminiService {
     imagesBase64?: string[]
   ): Promise<string> {
     try {
-      // ✅ 构造图片内容
-      const contentParts: any[] = [];
+      // ✅ 只传纯 base64 字符串数组（与后端对齐）
+      const pureBase64Images = imagesBase64?.map(img => {
+        return img.split(',')[1] || img;
+      }) || [];
 
-      if (imagesBase64 && imagesBase64.length > 0) {
-        imagesBase64.forEach(img => {
-          const base64Data = img.split(',')[1];
-          const mimeType = img.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
-          contentParts.push({
-            type: "image_url",
-            image_url: {
-              url: `data:${mimeType};base64,${base64Data}`
-            }
-          });
-        });
-      }
-
-      contentParts.push({
-        type: "text",
-        text: prompt
-      });
-
-      // ✅ 调用后端代理
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: contentParts,
-          systemPrompt: TOOL_PROMPTS[type], // ✅ 保留你的角色设定
+          prompt: prompt,
+          systemPrompt: TOOL_PROMPTS[type],
           isPro,
+          images: pureBase64Images, // ✅ 对齐后端字段名
         }),
       });
 
       if (!response.ok) {
+        const err = await response.json();
+        console.error("❌ Backend Error:", err);
         return '<p style="color:red;">语枢智能服务暂时不可用，请稍后再试。</p>';
       }
 
-      // ✅ 流式解析（核心修复点）
+      // ✅ 流式解析
       const reader = response.body!.getReader();
       const decoder = new TextDecoder("utf-8");
       let fullText = "";
@@ -73,23 +59,19 @@ export class GeminiService {
 
         for (const line of lines) {
           if (!line.startsWith("data:")) continue;
-
           const jsonStr = line.replace("data:", "").trim();
           if (jsonStr === "[DONE]") continue;
 
           try {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              fullText += content;
-            }
+            if (content) fullText += content;
           } catch {
-            // 忽略单行解析错误
+            // 忽略单行错误
           }
         }
       }
 
-      // ✅ 转成 Markdown HTML
       return marked.parse(fullText);
 
     } catch (error) {
