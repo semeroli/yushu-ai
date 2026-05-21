@@ -1,3 +1,5 @@
+import { ImagePart } from '@google/genai';
+
 export type ToolType = 'general' | 'ancient' | 'essay' | 'lesson' | 'reading' | 'poetry';
 
 const TOOL_PROMPTS: Record<ToolType, string> = {
@@ -10,26 +12,25 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 };
 
 export class GeminiService {
-  /**
-   * 生成教学资源（DeepSeek-V4-Pro / ModelScope）
-   */
   async generateTeachingResource(
     prompt: string,
     type: ToolType = 'general',
     isPro: boolean = false,
     imagesBase64?: string[]
-  ): Promise<string> {
+  ) {
     try {
-      const apiKey = process.env.MODELSCOPE_API_KEY;
-      if (!apiKey) {
-        return "ERROR_KEY_INVALID";
-      }
+      const modelName = isPro
+        ? 'deepseek-ai/DeepSeek-V4-Pro'
+        : 'deepseek-ai/DeepSeek-V4-Pro';
 
       const systemInst = TOOL_PROMPTS[type] + " 请使用清晰的 Markdown 格式输出。";
 
+      /* ---------------- 代理地址（不变） ---------------- */
+      const proxyUrl = `/api/v1beta/models/${modelName}:generateContent`;
+
+      /* ---------------- 多模态内容（完全不变） ---------------- */
       const contentParts: any[] = [];
 
-      // ✅ 多模态：图片（完全保持你原有逻辑）
       if (imagesBase64 && imagesBase64.length > 0) {
         imagesBase64.forEach(img => {
           const base64Data = img.split(',')[1];
@@ -46,79 +47,39 @@ export class GeminiService {
       const textPrompt = prompt.trim() || (imagesBase64?.length ? "请分析这些图片的内容。" : "");
       contentParts.push({ text: textPrompt });
 
-      const payload = {
-        model: 'deepseek-ai/DeepSeek-V4-Pro', // ✅ 魔塔模型
+      const payload: any = {
+        model: modelName,
         messages: [
           { role: 'system', content: systemInst },
           { role: 'user', content: contentParts }
         ],
-        stream: true, // ✅ 严格对齐 Python 示例
         temperature: 0.7,
-        max_tokens: isPro ? 4096 : 2048
+        max_tokens: 2048
       };
 
-      const response = await fetch('https://api-inference.modelscope.cn/v1/chat/completions', {
+      if (isPro) {
+        payload.max_tokens = 4096;
+      }
+
+      const response = await fetch(proxyUrl, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        const err = await response.json();
-        if (response.status === 401) return "ERROR_KEY_INVALID";
-        throw new Error(err.error?.message || '请求失败');
-      }
-
-      // ✅ 严格对齐 Python 示例的流式解析
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder('utf-8');
-
-      let doneReasoning = false;
-      let fullText = '';
-
-      if (!reader) {
-        return '暂无内容。';
-      }
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n').filter(Boolean);
-
-        for (const line of lines) {
-          if (!line.startsWith('data:')) continue;
-
-          const jsonStr = line.replace('data:', '').trim();
-          if (jsonStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const delta = parsed.choices?.[0]?.delta;
-
-            if (delta?.reasoning_content && delta.reasoning_content !== '') {
-              fullText += delta.reasoning_content;
-            } else if (delta?.content && delta.content !== '') {
-              if (!doneReasoning) {
-                fullText += '\n\n === Final Answer ===\n';
-                doneReasoning = true;
-              }
-              fullText += delta.content;
-            }
-          } catch {
-            continue;
-          }
+        if (data.error?.message?.includes("key") || response.status === 401) {
+          return "ERROR_KEY_INVALID";
         }
+        throw new Error(data.error?.message || "请求失败");
       }
 
-      return fullText || '暂无内容。';
+      return data.choices?.[0]?.message?.content || "暂无内容。";
     } catch (error: any) {
-      console.error('DeepSeek Error:', error);
-      return '语枢智能服务暂时无法处理，请检查您的网络或稍后再试。';
+      console.error("DeepSeek Error:", error);
+      return "语枢智能服务暂时无法处理，请检查您的网络或稍后再试。";
     }
   }
 }
