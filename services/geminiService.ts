@@ -12,10 +12,46 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
   reading: "你是一位阅读推广人。请针对特定书籍或文章，梳理人物关系图谱、核心情节脉络，并设计3个具有思维挑战性的深度探究问题。",
 };
 
+/**
+ * ✅ 自定义 renderer：把 Markdown 改成“文段模式”
+ */
+const renderer = new marked.Renderer();
+
+// 去掉列表前的黑点，改成缩进文段
+renderer.listitem = (text) => {
+  return `<div class="md-li">${text}</div>`;
+};
+
+// 标题改成柔和的文段标题
+renderer.heading = (text, level) => {
+  const sizeMap: Record<number, string> = {
+    1: 'text-2xl',
+    2: 'text-xl',
+    3: 'text-lg',
+    4: 'text-base',
+    5: 'text-sm',
+    6: 'text-xs',
+  };
+  return `<div class="${sizeMap[level]} md-h">${text}</div>`;
+};
+
+// 段落更宽松
+renderer.paragraph = (text) => {
+  return `<div class="md-p">${text}</div>`;
+};
+
+// 分割线更淡
+renderer.hr = () => {
+  return `<div class="md-hr"></div>`;
+};
+
+marked.setOptions({
+  renderer,
+  gfm: true,
+  breaks: false,
+});
+
 export class GeminiService {
-  /**
-   * 生成教学资源（支持流式 + 多模态 + 专家模式）
-   */
   async generateTeachingResource(
     prompt: string,
     type: ToolType = "general",
@@ -23,7 +59,6 @@ export class GeminiService {
     imagesBase64?: string[]
   ): Promise<string> {
     try {
-      // ✅ 只传纯 base64 字符串数组（与后端对齐）
       const pureBase64Images = imagesBase64?.map(img => {
         return img.split(',')[1] || img;
       }) || [];
@@ -32,20 +67,17 @@ export class GeminiService {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: prompt,
+          prompt,
           systemPrompt: TOOL_PROMPTS[type],
           isPro,
-          images: pureBase64Images, // ✅ 对齐后端字段名
+          images: pureBase64Images,
         }),
       });
 
       if (!response.ok) {
-        const err = await response.json();
-        console.error("❌ Backend Error:", err);
-        return '<p style="color:red;">语枢智能服务暂时不可用，请稍后再试。</p>';
+        return '<div class="md-error">语枢智能服务暂时不可用，请稍后再试。</div>';
       }
 
-      // ✅ 流式解析
       const reader = response.body!.getReader();
       const decoder = new TextDecoder("utf-8");
       let fullText = "";
@@ -66,17 +98,15 @@ export class GeminiService {
             const parsed = JSON.parse(jsonStr);
             const content = parsed.choices?.[0]?.delta?.content;
             if (content) fullText += content;
-          } catch {
-            // 忽略单行错误
-          }
+          } catch {}
         }
       }
 
+      // ✅ 输出“文段模式”的 HTML
       return marked.parse(fullText);
 
-    } catch (error) {
-      console.error("GeminiService Error:", error);
-      return '<p style="color:red;">请求失败，请检查网络连接。</p>';
+    } catch {
+      return '<div class="md-error">请求失败，请检查网络连接。</div>';
     }
   }
 }
