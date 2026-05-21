@@ -11,17 +11,16 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 
 export class GeminiService {
   /**
-   * 生成教学资源（DeepSeek-V4-Pro / ModelScope / CF Pages Env）
+   * 生成教学资源（DeepSeek-V4-Pro / ModelScope）
    */
   async generateTeachingResource(
-    context: any,
     prompt: string,
     type: ToolType = 'general',
     isPro: boolean = false,
     imagesBase64?: string[]
   ): Promise<string> {
     try {
-      const apiKey = context.env.MODELSCOPE_API_KEY;
+      const apiKey = process.env.MODELSCOPE_API_KEY;
       if (!apiKey) {
         return "ERROR_KEY_INVALID";
       }
@@ -30,7 +29,7 @@ export class GeminiService {
 
       const contentParts: any[] = [];
 
-      // ✅ 多模态：图片
+      // ✅ 多模态：图片（完全保持你原有逻辑）
       if (imagesBase64 && imagesBase64.length > 0) {
         imagesBase64.forEach(img => {
           const base64Data = img.split(',')[1];
@@ -48,12 +47,12 @@ export class GeminiService {
       contentParts.push({ text: textPrompt });
 
       const payload = {
-        model: 'deepseek-ai/DeepSeek-V4-Pro',
+        model: 'deepseek-ai/DeepSeek-V4-Pro', // ✅ 魔塔模型
         messages: [
           { role: 'system', content: systemInst },
           { role: 'user', content: contentParts }
         ],
-        stream: true,
+        stream: true, // ✅ 严格对齐 Python 示例
         temperature: 0.7,
         max_tokens: isPro ? 4096 : 2048
       };
