@@ -1,6 +1,3 @@
-
-import { GoogleGenAI } from "@google/genai";
-
 export type ToolType = 'general' | 'ancient' | 'essay' | 'lesson' | 'reading' | 'poetry';
 
 const TOOL_PROMPTS: Record<ToolType, string> = {
@@ -14,75 +11,111 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 
 export class GeminiService {
   /**
-   * 生成教学资源
-   * @param prompt 文本提示词
-   * @param type 工具类型
-   * @param isPro 是否开启专家模式
-   * @param imagesBase64 (新增) 图片的 Base64 字符串数组，包含 data:image/... 前缀
+   * 生成教学资源（DeepSeek-V4-Pro / ModelScope）
    */
-  async generateTeachingResource(prompt: string, type: ToolType = 'general', isPro: boolean = false, imagesBase64?: string[]) {
+  async generateTeachingResource(
+    prompt: string,
+    type: ToolType = 'general',
+    isPro: boolean = false,
+    imagesBase64?: string[]
+  ): Promise<string> {
     try {
-      const modelName = isPro ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview';
       const systemInst = TOOL_PROMPTS[type] + " 请使用清晰的 Markdown 格式输出。";
 
-      // 统一使用代理转发
-      const proxyUrl = `/api/v1beta/models/${modelName}:generateContent`;
-      
-      // 构建内容部分 (Multimodal Payload)
       const contentParts: any[] = [];
-      
-      // 如果有图片，处理图片数据
+
+      // ✅ 多模态：图片
       if (imagesBase64 && imagesBase64.length > 0) {
         imagesBase64.forEach(img => {
-          // 去除 Base64 头部前缀 (例如 "data:image/png;base64,")
           const base64Data = img.split(',')[1];
-          // 简单判断类型，默认 jpeg，实际可从 base64 头解析
           const mimeType = img.match(/data:([^;]+);/)?.[1] || 'image/jpeg';
-          
           contentParts.push({
             inlineData: {
-              mimeType: mimeType,
+              mimeType,
               data: base64Data
             }
           });
         });
       }
 
-      // 添加文本提示词 (如果用户只发图片没写字，默认加一句提示)
-      const textPrompt = prompt.trim() || (imagesBase64 && imagesBase64.length > 0 ? "请分析这些图片的内容。" : "");
+      const textPrompt = prompt.trim() || (imagesBase64?.length ? "请分析这些图片的内容。" : "");
       contentParts.push({ text: textPrompt });
 
-      const payload: any = {
-        contents: [{ parts: contentParts }],
-        system_instruction: { parts: [{ text: systemInst }] },
-        generationConfig: { 
-          temperature: 0.7,
-          maxOutputTokens: 2048
-        }
+      const payload = {
+        model: 'deepseek-ai/DeepSeek-V4-Pro', // ✅ 魔塔模型
+        messages: [
+          { role: 'system', content: systemInst },
+          { role: 'user', content: contentParts }
+        ],
+        stream: true,
+        temperature: 0.7,
+        max_tokens: isPro ? 4096 : 2048
       };
 
-      // 专家模式开启思维预算
-      if (isPro) {
-        payload.generationConfig.thinkingConfig = { thinkingBudget: 32768 };
-      }
-
-      const response = await fetch(proxyUrl, {
+      const response = await fetch('https://api-inference.modelscope.cn/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Authorization': 'Bearer ms-04430a72-e2cc-477c-9191-9d1abc36f3bd', // ✅ 魔塔 Key
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(payload)
       });
 
-      const data = await response.json();
-      
       if (!response.ok) {
-        if (data.error?.message?.includes("key") || response.status === 403) return "ERROR_KEY_INVALID";
-        throw new Error(data.error?.message || '请求失败');
+        const err = await response.json();
+        if (err.error?.message?.includes('key') || response.status === 401) {
+          return 'ERROR_KEY_INVALID';
+        }
+        throw new Error(err.error?.message || '请求失败');
       }
 
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || "暂无内容。";
+      // ✅ 严格对齐 Python 示例的流式解析
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+
+      let doneReasoning = false;
+      let fullText = '';
+
+      if (!reader) {
+        return '暂无内容。';
+      }
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n').filter(Boolean);
+
+        for (const line of lines) {
+          if (!line.startsWith('data:')) continue;
+
+          const jsonStr = line.replace('data:', '').trim();
+          if (jsonStr === '[DONE]') continue;
+
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const delta = parsed.choices?.[0]?.delta;
+
+            if (delta?.reasoning_content && delta.reasoning_content !== '') {
+              fullText += delta.reasoning_content;
+            } else if (delta?.content && delta.content !== '') {
+              if (!doneReasoning) {
+                fullText += '\n\n === Final Answer ===\n';
+                doneReasoning = true;
+              }
+              fullText += delta.content;
+            }
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      return fullText || '暂无内容。';
     } catch (error: any) {
-      console.error("Gemini Error:", error);
-      return "语枢智能服务暂时无法处理，请检查您的网络或稍后再试。";
+      console.error('DeepSeek Error:', error);
+      return '语枢智能服务暂时无法处理，请检查您的网络或稍后再试。';
     }
   }
 }
