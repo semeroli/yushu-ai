@@ -13,16 +13,11 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 };
 
 /**
- * ✅ 自定义 renderer：把 Markdown 改成“文段模式”
+ * ✅ 方案 1：自定义渲染器（文段模式）
  */
 const renderer = new marked.Renderer();
 
-// 去掉列表前的黑点，改成缩进文段
-renderer.listitem = (text) => {
-  return `<div class="md-li">${text}</div>`;
-};
-
-// 标题改成柔和的文段标题
+// 标题：带底部分割线
 renderer.heading = (text, level) => {
   const sizeMap: Record<number, string> = {
     1: 'text-2xl',
@@ -35,12 +30,22 @@ renderer.heading = (text, level) => {
   return `<div class="${sizeMap[level]} md-h">${text}</div>`;
 };
 
-// 段落更宽松
+// 段落：宽松行高
 renderer.paragraph = (text) => {
   return `<div class="md-p">${text}</div>`;
 };
 
-// 分割线更淡
+// 列表：去掉黑点，改成缩进文段
+renderer.listitem = (text) => {
+  return `<div class="md-li">${text}</div>`;
+};
+
+// 粗体：高亮关键词
+renderer.strong = (text) => {
+  return `<strong class="md-strong">${text}</strong>`;
+};
+
+// 分割线：淡灰色
 renderer.hr = () => {
   return `<div class="md-hr"></div>`;
 };
@@ -102,7 +107,6 @@ export class GeminiService {
         }
       }
 
-      // ✅ 输出“文段模式”的 HTML
       return marked.parse(fullText);
 
     } catch {
