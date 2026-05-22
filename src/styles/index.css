@@ -1,3 +1,5 @@
+/* ===== 语枢 AI：文段模式（40 行）===== */
+
 .md-h {
   font-weight: 600;
   margin-top: 1.5em;
@@ -30,6 +32,11 @@
   height: 6px;
   background: #60a5fa;
   border-radius: 50%;
+}
+
+.md-strong {
+  color: #60a5fa;
+  font-weight: 600;
 }
 
 .md-hr {
