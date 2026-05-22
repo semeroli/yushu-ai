@@ -13,7 +13,7 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 };
 
 /**
- * ✅ 方案 1：自定义渲染器（文段模式）
+ * ✅ 只替换 Renderer：文段模式（不改任何业务逻辑）
  */
 const renderer = new marked.Renderer();
 
