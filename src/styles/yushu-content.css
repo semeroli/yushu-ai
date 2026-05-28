@@ -1,0 +1,95 @@
+/* src/styles/yushu-content.css */
+
+/* 语枢内容容器 */
+.yushu-content-container {
+  font-family: "Noto Serif SC", "Source Han Serif SC", "SimSun", serif; /* 衬线字体，更适合阅读古文 */
+  color: #333;
+  line-height: 1.8;
+  word-wrap: break-word;
+}
+
+/* 段落 */
+.yushu-content-container p {
+  margin: 1em 0;
+  text-indent: 2em; /* 首行缩进 */
+}
+
+/* 标题 */
+.yushu-content-container h1,
+.yushu-content-container h2,
+.yushu-content-container h3,
+.yushu-content-container h4 {
+  font-weight: 600;
+  color: #1f2937; /* 深灰黑 */
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+}
+
+.yushu-content-container h3 {
+  font-size: 1.25rem; /* 20px */
+  border-left: 4px solid #10b981; /* 语枢绿边框 */
+  padding-left: 0.5em;
+  margin-top: 2em;
+}
+
+/* 列表 */
+.yushu-content-container ul,
+.yushu-content-container ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+.yushu-content-container li {
+  margin: 0.5em 0;
+}
+
+/* 表格 (针对你的字词对译表) */
+.yushu-content-container table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.yushu-content-container th,
+.yushu-content-container td {
+  border: 1px solid #d1d5db; /* 浅灰边框 */
+  padding: 0.75em 1em;
+  text-align: left;
+}
+
+.yushu-content-container th {
+  background-color: #f3f4f6; /* 表头浅灰 */
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.yushu-content-container tr:nth-child(even) {
+  background-color: #f9fafb; /* 斑马纹 */
+}
+
+/* 代码块 (如果 AI 返回了代码) */
+.yushu-content-container pre {
+  background-color: #1f2937; /* 深色背景 */
+  color: #d1d5db;
+  padding: 1em;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 1em 0;
+  font-family: "Fira Code", monospace;
+}
+
+.yushu-content-container code {
+  font-family: "Fira Code", monospace;
+  background-color: #f3f4f6;
+  padding: 0.2em 0.4em;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+}
+
+/* 强调文本 */
+.yushu-content-container strong {
+  color: #065f46; /* 深绿色，呼应品牌 */
+  font-weight: 600;
+}
