@@ -55,8 +55,49 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
     '5. 提供阅读策略指导（精读、略读、跳读的应用场景）',
 };
 
+// OCR 专用提示词
+const OCR_PROMPT = '你是一位专业的文字识别助手。请完整、准确地识别图片中的文字内容，保持原文的段落和格式。只输出识别到的文字，不要添加任何分析、评论或解释。';
+
 interface Env {
   AGNES_API_KEY?: string;
+}
+
+// 调用 Agnes API 的通用函数
+async function callAgnesAPI(
+  apiKey: string,
+  messages: any[],
+  maxTokens: number,
+  temperature: number,
+  isExpertMode: boolean
+): Promise<string> {
+  const requestBody: Record<string, any> = {
+    model: 'agnes-2.0-flash',
+    messages,
+    max_tokens: maxTokens,
+    temperature,
+  };
+
+  if (isExpertMode) {
+    requestBody.chat_template_kwargs = { enable_thinking: true };
+  }
+
+  const apiResponse = await fetch(`${AGNES_API_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(requestBody),
+  });
+
+  if (!apiResponse.ok) {
+    const errorData = await apiResponse.json().catch(() => ({}));
+    console.error('Agnes API error:', apiResponse.status, errorData);
+    throw new Error(`API error: ${apiResponse.status}`);
+  }
+
+  const data = await apiResponse.json();
+  return data.choices?.[0]?.message?.content || '';
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -70,8 +111,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   try {
-    const body = await request.json() as { prompt?: string; toolType?: ToolType; isExpertMode?: boolean; images?: string[] };
-    const { prompt, toolType = 'general', isExpertMode = false, images } = body;
+    const body = await request.json() as {
+      prompt?: string;
+      toolType?: ToolType;
+      isExpertMode?: boolean;
+      images?: string[];
+      action?: 'ocr' | 'generate';
+      ocrText?: string;
+    };
+    const { prompt, toolType = 'general', isExpertMode = false, images, action = 'generate', ocrText } = body;
 
     if (!prompt?.trim()) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), {
@@ -80,22 +128,21 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // 统一使用 agnes-2.0-flash（支持多模态）
-    const model = 'agnes-2.0-flash';
+    // ========== 第一阶段：OCR 识别 ==========
+    if (action === 'ocr') {
+      if (!images || images.length === 0) {
+        return new Response(JSON.stringify({ error: 'OCR requires images' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
 
-    // 构建用户消息内容（支持图片）
-    const userContent: any[] = [];
+      // 构建图片内容
+      const userContent: any[] = [
+        { type: 'text', text: prompt },
+      ];
 
-    // 如果有图片，提示模型先识别文字
-    if (images && images.length > 0) {
-      userContent.push({
-        type: 'text',
-        text: `${prompt}\n\n（如果上传了图片，请先识别图片中的文字内容，再进行分析。）`,
-      });
-
-      // 添加图片
       for (const img of images) {
-        // 确保是完整的 data URL 格式
         let imageUrl = img;
         if (!imageUrl.startsWith('data:image/')) {
           imageUrl = `data:image/jpeg;base64,${imageUrl}`;
@@ -105,8 +152,58 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
           image_url: { url: imageUrl },
         });
       }
-    } else {
-      userContent.push({ type: 'text', text: prompt });
+
+      const messages = [
+        { role: 'system', content: OCR_PROMPT },
+        { role: 'user', content: userContent },
+      ];
+
+      console.log('OCR: Recognizing text from', images.length, 'images');
+
+      const result = await callAgnesAPI(
+        env.AGNES_API_KEY,
+        messages,
+        4096,
+        0.3,
+        false
+      );
+
+      if (!result) {
+        return new Response(JSON.stringify({ error: 'OCR failed: empty result' }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+
+      return new Response(JSON.stringify({ ocrText: result }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ========== 第二阶段：生成批阅意见 ==========
+    // 构建用户消息内容
+    let finalPrompt = prompt;
+
+    // 如果有 OCR 文本，加到提示词中
+    if (ocrText?.trim()) {
+      finalPrompt = `【作文原文】\n${ocrText.trim()}\n\n【批阅要求】\n${prompt}`;
+    }
+
+    const userContent: any[] = [{ type: 'text', text: finalPrompt }];
+
+    // 如果还有图片（用户想看原图），也带上
+    if (images && images.length > 0) {
+      for (const img of images) {
+        let imageUrl = img;
+        if (!imageUrl.startsWith('data:image/')) {
+          imageUrl = `data:image/jpeg;base64,${imageUrl}`;
+        }
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: imageUrl },
+        });
+      }
     }
 
     const messages = [
@@ -114,49 +211,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       { role: 'user', content: userContent },
     ];
 
-    const requestBody: Record<string, any> = {
-      model,
+    console.log('Generate: toolType=', toolType, '| hasOCR=', !!ocrText, '| images=', images?.length || 0);
+
+    const result = await callAgnesAPI(
+      env.AGNES_API_KEY,
       messages,
-      max_tokens: isExpertMode ? 4096 : 2048,
-      temperature: isExpertMode ? 0.7 : 0.9,
-    };
-
-    if (isExpertMode) {
-      requestBody.chat_template_kwargs = { enable_thinking: true };
-    }
-
-    console.log('Calling Agnes API with model:', model, '| Images:', images?.length || 0);
-
-    // 调用 Agnes API
-    const apiResponse = await fetch(`${AGNES_API_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${env.AGNES_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!apiResponse.ok) {
-      const errorData = await apiResponse.json().catch(() => ({}));
-      console.error('Agnes API error:', apiResponse.status, errorData);
-      if (apiResponse.status === 401 || apiResponse.status === 403) {
-        return new Response(JSON.stringify({ error: 'KEY_INVALID', details: errorData }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      return new Response(JSON.stringify({ error: 'API request failed', details: errorData }), {
-        status: apiResponse.status,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const data = await apiResponse.json();
-    const result = data.choices?.[0]?.message?.content || '';
+      isExpertMode ? 4096 : 2048,
+      isExpertMode ? 0.7 : 0.9,
+      isExpertMode
+    );
 
     if (!result) {
-      return new Response(JSON.stringify({ error: 'Empty response', raw: JSON.stringify(data).slice(0, 500) }), {
+      return new Response(JSON.stringify({ error: 'Empty response' }), {
         status: 502,
         headers: { 'Content-Type': 'application/json' },
       });
