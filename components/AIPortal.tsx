@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, FileText } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { generateTeachingResource, ToolType } from '../services/geminiService';
+import { generateTeachingResource, ocrImages, ToolType } from '../services/geminiService';
 import { MotionDiv } from '../lib/motion';
 
 interface Message {
@@ -29,6 +29,8 @@ export const AIPortal: React.FC = () => {
   const [isExpertMode, setIsExpertMode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [ocrText, setOcrText] = useState<string>('');
+  const [showOcrResult, setShowOcrResult] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -130,6 +132,86 @@ export const AIPortal: React.FC = () => {
     }
   };
 
+  // 第一步：OCR 识别图片文字
+  const handleOCR = async () => {
+    const textToSend = input;
+    const imagesToSend = [...selectedImages];
+
+    if (imagesToSend.length === 0 || isLoading) return;
+
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: textToSend || '请识别图片中的作文内容',
+      type: activeTool,
+      images: imagesToSend
+    }]);
+    setIsLoading(true);
+
+    const ocrResult = await ocrImages(imagesToSend, textToSend || '请识别图片中的文字内容');
+
+    if (ocrResult === 'ERROR_KEY_INVALID') {
+      setIsExpertMode(false);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔑 服务密钥无效，请联系管理员更新配置。'
+      }]);
+      setIsLoading(false);
+      return;
+    }
+
+    if (ocrResult) {
+      setOcrText(ocrResult);
+      setShowOcrResult(true);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: `📄 **识别到的作文原文：**\n\n${ocrResult}\n\n---\n\n请确认文字内容是否正确，然后点击「开始批阅」按钮。`,
+      }]);
+    } else {
+      setMessages(prev => [...prev, { role: 'assistant', content: '❌ 文字识别失败，请重试或手动输入。' }]);
+    }
+    setIsLoading(false);
+  };
+
+  // 第二步：生成批阅意见
+  const handleGenerate = async () => {
+    const textToSend = input;
+    const typeToUse = activeTool;
+    const imagesToSend = [...selectedImages];
+
+    if (isLoading) return;
+
+    setInput('');
+    setSelectedImages([]);
+    setShowOcrResult(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: '📝 正在生成批阅意见，请稍候...',
+    }]);
+    setIsLoading(true);
+
+    const response = await generateTeachingResource(
+      textToSend,
+      typeToUse,
+      isExpertMode,
+      imagesToSend.length > 0 ? imagesToSend : undefined,
+      ocrText
+    );
+
+    if (response === 'ERROR_KEY_INVALID') {
+      setIsExpertMode(false);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔑 服务密钥无效，请联系管理员更新配置。'
+      }]);
+    } else {
+      setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
+    }
+    setIsLoading(false);
+    setOcrText('');
+  };
+
   const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
     const textToSend = overridePrompt || input;
     const typeToUse = forceType || activeTool;
@@ -137,6 +219,19 @@ export const AIPortal: React.FC = () => {
 
     if ((!textToSend.trim() && imagesToSend.length === 0) || isLoading) return;
 
+    // 如果有图片且还没 OCR，先 OCR
+    if (imagesToSend.length > 0 && !showOcrResult) {
+      await handleOCR();
+      return;
+    }
+
+    // 如果已经 OCR 过了，直接生成
+    if (showOcrResult && ocrText) {
+      await handleGenerate();
+      return;
+    }
+
+    // 纯文字模式（无图片）
     setInput('');
     setSelectedImages([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -145,11 +240,10 @@ export const AIPortal: React.FC = () => {
       role: 'user',
       content: textToSend,
       type: typeToUse,
-      images: imagesToSend.length > 0 ? imagesToSend : undefined
     }]);
     setIsLoading(true);
 
-    const response = await generateTeachingResource(textToSend, typeToUse, isExpertMode, imagesToSend.length > 0 ? imagesToSend : undefined);
+    const response = await generateTeachingResource(textToSend, typeToUse, isExpertMode);
 
     if (response === 'ERROR_KEY_INVALID') {
       setIsExpertMode(false);
@@ -368,13 +462,28 @@ export const AIPortal: React.FC = () => {
                   className="flex-1 bg-transparent outline-none text-sm resize-none max-h-32 text-link dark:text-white placeholder:text-link/30 dark:placeholder:text-white/30"
                   rows={1}
                 />
-                <button
-                  onClick={() => handleSend()}
-                  disabled={isLoading || (!input.trim() && selectedImages.length === 0)}
-                  className="p-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:hover:bg-emerald-600 shrink-0 shadow-md shadow-emerald-600/20 mb-0.5"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
+                {showOcrResult && ocrText ? (
+                  <button
+                    onClick={() => handleGenerate()}
+                    disabled={isLoading}
+                    className="px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-500 transition-all disabled:opacity-30 shrink-0 shadow-md shadow-purple-600/20 mb-0.5 flex items-center gap-2"
+                  >
+                    <FileText className="w-4 h-4" />
+                    <span className="text-sm font-medium">开始批阅</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={isLoading || (!input.trim() && selectedImages.length === 0)}
+                    className="p-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:hover:bg-emerald-600 shrink-0 shadow-md shadow-emerald-600/20 mb-0.5"
+                  >
+                    {selectedImages.length > 0 && !showOcrResult ? (
+                      <span className="text-sm font-medium px-2">识别文字</span>
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
+                  </button>
+                )}
               </div>
               <p className="text-center text-[10px] text-link/20 dark:text-white/20 px-2">
                 AI 生成内容仅供参考，请结合实际情况进行判断和修改
