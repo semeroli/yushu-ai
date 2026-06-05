@@ -185,15 +185,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // 构建用户消息内容
     let finalPrompt = prompt;
 
-    // 如果有 OCR 文本，加到提示词中
+    // 如果有 OCR 文本，加到提示词中（此时不再传图片，避免 Agnes API 格式错误）
     if (ocrText?.trim()) {
       finalPrompt = `【作文原文】\n${ocrText.trim()}\n\n【批阅要求】\n${prompt}`;
     }
 
     const userContent: any[] = [{ type: 'text', text: finalPrompt }];
 
-    // 如果还有图片（用户想看原图），也带上
-    if (images && images.length > 0) {
+    // 只有在没有 OCR 文本且有图片时，才传图片（纯图片识别模式）
+    if (!ocrText?.trim() && images && images.length > 0) {
       for (const img of images) {
         let imageUrl = img;
         if (!imageUrl.startsWith('data:image/')) {
