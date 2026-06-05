@@ -19,6 +19,23 @@ const TOOLS = [
   { id: 'reading', label: '阅读理解', icon: <BookOpen className="w-4 h-4" />, color: 'text-purple-400' },
 ];
 
+// 清理 Markdown 语法符号
+const cleanMarkdown = (text: string): string => {
+  return text
+    // 去掉粗体标记 **
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    // 去掉标题标记 ##
+    .replace(/^#{1,6}\s+/gm, '')
+    // 去掉列表标记 * 或 - 开头
+    .replace(/^\s*[\*\-]\s+/gm, '')
+    // 去掉斜体标记 * (单个)
+    .replace(/(?<!\*)\*(?!\*)\s*(.*?)\s*(?<!\*)\*(?!\*)/g, '$1')
+    // 去掉 __ 标记
+    .replace(/__(.*?)__/g, '$1')
+    // 去掉 ` 代码标记
+    .replace(/`(.*?)`/g, '$1');
+};
+
 export const AIPortal: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: '你好！我是语枢AI助手，为你提供专业的语文教学辅助服务。我可以帮你进行古诗文鉴赏、教案生成、作文批改等多种功能。选择下方工具开始使用吧！' }
@@ -379,11 +396,11 @@ export const AIPortal: React.FC = () => {
                         : 'bg-white/80 dark:bg-white/5 border border-black/5 dark:border-white/10 text-link dark:text-white/90 prose prose-invert max-w-none rounded-tl-none shadow-sm'
                     }`}>
                       <div className="whitespace-pre-wrap font-sans">
-                        {msg.content}
+                        {msg.role === 'assistant' ? cleanMarkdown(msg.content) : msg.content}
                       </div>
                       {msg.role === 'assistant' && i > 0 && (
                         <button
-                          onClick={() => handleCopy(msg.content)}
+                          onClick={() => handleCopy(cleanMarkdown(msg.content))}
                           className="absolute top-2 right-2 p-1.5 bg-black/5 dark:bg-black/40 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           {copied ? <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3 text-link/40 dark:text-white/40" />}
