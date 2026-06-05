@@ -15,7 +15,7 @@ const BaseModal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) =
     {isOpen && (
       <div className="fixed inset-0 z-[110] flex items-center justify-center px-4">
         <MotionDiv initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm" />
-        <MotionDiv initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-paper dark:bg-[#0f0f0f] border border-black/10 dark:border-white/10 rounded-[2.5rem] overflow-hidden shadow-2xl">
+        <MotionDiv initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="relative w-full max-w-md bg-paper dark:bg-[#0f0f0f] border border-black/10 dark:border-white/10 rounded-2xl overflow-hidden shadow-2xl">
           <div className="p-8">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold tracking-tight text-link dark:text-white serif-zh">{title}</h3>
