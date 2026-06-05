@@ -87,11 +87,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const userContent: any[] = [{ type: 'text', text: prompt }];
     if (images && images.length > 0) {
       for (const img of images) {
-        const match = img.match(/^data:(image\/\w+);base64,(.+)$/);
-        if (match) {
+        // Agnes Image API 支持 base64 data URL 格式
+        if (img.startsWith('data:image/')) {
           userContent.push({
             type: 'image_url',
-            image_url: { url: `data:${match[1]};base64,${match[2]}`, detail: 'high' },
+            image_url: { url: img },
           });
         }
       }
