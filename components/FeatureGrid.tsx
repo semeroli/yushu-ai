@@ -1,33 +1,29 @@
-
 import React from 'react';
-import { motion } from 'framer-motion';
 import { BookOpen, Scroll, PenTool, ClipboardCheck, Sparkles, Map } from 'lucide-react';
-
-// Use a type-casted motion.div to resolve property 'initial' does not exist error
-const MotionDiv = motion.div as any;
+import { MotionDiv } from '../lib/motion';
 
 const features = [
   {
-    title: "文言文智慧译注",
-    description: "一键获取精准翻译、实词虚词解析及文化背景，显著降低文言文备课难度。",
+    title: "古诗文鉴赏助手",
+    description: "深度解读诗词意境、逐句赏析古文、辅助理解修辞手法，涵盖中小学必背古诗文全解析。",
     icon: <Scroll className="w-6 h-6 text-orange-400" />,
     className: "md:col-span-2"
   },
   {
-    title: "创意作文批改",
-    description: "多维度智能评分，提供极具温情的启发式评语与润色建议。",
+    title: "作文批改评改",
+    description: "智能分析文章结构和语言表达，提供具体的修改建议和优秀范文对比参考。",
     icon: <PenTool className="w-6 h-6 text-pink-400" />,
     className: "md:col-span-1"
   },
   {
-    title: "整本书阅读导图",
-    description: "AI 快速梳理长篇名著的人物关系、情节脉络，自动生成探究性问题。",
+    title: "智能教案生成器",
+    description: "AI 驱动的个性化教学方案建议，根据课标自动生成结构化的教案，一键导出多种格式。",
     icon: <Map className="w-6 h-6 text-blue-400" />,
     className: "md:col-span-1"
   },
   {
-    title: "智能练习设计",
-    description: "根据教材文本自动生成高质量阅读理解、基础知识测试卷。",
+    title: "教学成果评估",
+    description: "多维度智能评估学生学习成果和知识掌握情况，生成个性化学习路径建议。",
     icon: <ClipboardCheck className="w-6 h-6 text-emerald-400" />,
     className: "md:col-span-2"
   }
@@ -38,8 +34,8 @@ export const FeatureGrid: React.FC = () => {
     <section id="features" className="py-24 px-6 bg-paper dark:bg-[#080808]">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-3xl md:text-5xl font-bold mb-4 serif-zh">全方位的 <span className="text-emerald-600 dark:text-emerald-500">教学资源生产力</span></h2>
-          <p className="text-ink/60 dark:text-white/60 max-w-2xl mx-auto">为语文老师量身打造的 AI 套件，让您从琐碎的事务中解脱，回归教学艺术本质。</p>
+          <h2 className="text-3xl md:text-5xl font-bold mb-4 serif-zh">强大的 <span className="text-emerald-600 dark:text-emerald-500">AI助手功能</span></h2>
+          <p className="text-link/60 dark:text-white/60 max-w-2xl mx-auto">语枢专为语文教育场景打造，覆盖课前备课、课中辅助、课后评估全流程的AI智能工具。</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -56,7 +52,7 @@ export const FeatureGrid: React.FC = () => {
                 {feature.icon}
               </div>
               <h3 className="text-xl font-bold mb-3 serif-zh">{feature.title}</h3>
-              <p className="text-ink/50 dark:text-white/50 leading-relaxed">{feature.description}</p>
+              <p className="text-link/50 dark:text-white/50 leading-relaxed">{feature.description}</p>
             </MotionDiv>
           ))}
         </div>
