@@ -52,7 +52,62 @@ export const AIPortal: React.FC = () => {
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // 压缩图片：限制最大宽度/高度，降低质量，控制 base64 大小
+  const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          // 限制最大尺寸 1200px（保持比例）
+          const maxSize = 1200;
+          let { width, height } = img;
+          if (width > maxSize || height > maxSize) {
+            if (width > height) {
+              height = Math.round((height * maxSize) / width);
+              width = maxSize;
+            } else {
+              width = Math.round((width * maxSize) / height);
+              height = maxSize;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 先尝试 quality 0.8，如果还太大再降到 0.6
+          let quality = 0.8;
+          let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+          // 如果超过 500KB，降低质量
+          const base64Length = dataUrl.length - 'data:image/jpeg;base64,'.length;
+          const sizeInBytes = (base64Length * 3) / 4;
+          if (sizeInBytes > 500 * 1024) {
+            quality = 0.6;
+            dataUrl = canvas.toDataURL('image/jpeg', quality);
+          }
+
+          resolve(dataUrl);
+        };
+        img.onerror = () => reject(new Error('Image load failed'));
+      };
+      reader.onerror = () => reject(new Error('File read failed'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
@@ -61,20 +116,18 @@ export const AIPortal: React.FC = () => {
       return;
     }
 
-    files.forEach(file => {
-      if (file.size > 5 * 1024 * 1024) {
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 超过 5MB，请压缩后重试` }]);
-        return;
+    for (const file of files) {
+      if (file.size > 10 * 1024 * 1024) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 超过 10MB，无法处理` }]);
+        continue;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSelectedImages(prev => [...prev, reader.result as string]);
-      };
-      reader.onerror = () => {
-        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 读取失败，请重试` }]);
-      };
-      reader.readAsDataURL(file);
-    });
+      try {
+        const compressed = await compressImage(file);
+        setSelectedImages(prev => [...prev, compressed]);
+      } catch {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 处理失败，请重试` }]);
+      }
+    }
   };
 
   const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
