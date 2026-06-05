@@ -121,7 +121,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     };
     const { prompt, toolType = 'general', isExpertMode = false, images, action = 'generate', ocrText } = body;
 
-    if (!prompt?.trim()) {
+    // 有 ocrText 时 prompt 可以为空（后端会用默认批阅提示词）
+    if (!prompt?.trim() && !ocrText?.trim()) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
@@ -137,7 +138,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
         });
       }
 
-      // 构建图片内容
       const userContent: any[] = [
         { type: 'text', text: prompt },
       ];
@@ -182,7 +182,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // ========== 第二阶段：生成批阅意见 ==========
-    // 构建用户消息内容
     let finalPrompt = prompt;
 
     // 如果有 OCR 文本，加到提示词中（此时不再传图片，避免 Agnes API 格式错误）
