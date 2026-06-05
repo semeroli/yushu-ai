@@ -174,11 +174,18 @@ export const AIPortal: React.FC = () => {
 
   // 第二步：生成批阅意见
   const handleGenerate = async () => {
-    const textToSend = input;
-    const typeToUse = activeTool;
-    const imagesToSend = [...selectedImages];
-
     if (isLoading) return;
+
+    const typeToUse = activeTool;
+
+    // 有 ocrText 时不需要再传图片，避免请求体过大
+    const imagesToSend = ocrText ? [] : [...selectedImages];
+
+    // input 为空时有 ocrText 就用默认批阅提示词
+    let textToSend = input.trim();
+    if (ocrText && !textToSend) {
+      textToSend = '请详细批阅这篇作文，包括语言表达、立意深度、结构逻辑和素材运用四个方面，并给出预估分数（40-100分）和具体修改建议。';
+    }
 
     setInput('');
     setSelectedImages([]);
