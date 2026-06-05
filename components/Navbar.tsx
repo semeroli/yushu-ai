@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Library, Sun, Moon } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { cn } from '../lib/utils';
 import { useTheme } from '../contexts/ThemeContext';
-
-const MotionDiv = motion.div as any;
+import { MotionDiv } from '../lib/motion';
 
 interface NavbarProps {
   onAuthClick: () => void;
@@ -23,8 +22,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
 
   const navItems = [
     { label: '功能特性', href: '#features' },
-    { label: '智能助手', href: '#experience' },
-    { label: '资源方案', href: '#pricing' },
+    { label: '助手体验', href: '#experience' },
+    { label: '方案定价', href: '#pricing' },
   ];
 
   return (
@@ -39,17 +38,17 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
           <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center group-hover:rotate-12 transition-transform">
             <Library className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold tracking-tight text-ink dark:text-white">语枢<span className="text-emerald-500">AI</span></span>
+          <span className="text-xl font-bold tracking-tight text-link dark:text-white">语枢<span className="text-emerald-500">AI</span></span>
         </div>
 
         <div className="hidden md:flex items-center gap-8">
           {navItems.map((item) => (
-            <a key={item.label} href={item.href} className="text-sm font-medium text-ink/70 dark:text-white/70 hover:text-ink dark:hover:text-white transition-colors">{item.label}</a>
+            <a key={item.label} href={item.href} className="text-sm font-medium text-link/70 dark:text-white/70 hover:text-link dark:hover:text-white transition-colors">{item.label}</a>
           ))}
           
-          <button 
+          <button
             onClick={toggleTheme}
-            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-ink/70 dark:text-white/70"
+            className="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors text-link/70 dark:text-white/70"
             title={theme === 'dark' ? '切换到浅色模式' : '切换到深色模式'}
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -59,18 +58,18 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
             onClick={onAuthClick}
             className="px-5 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-full hover:bg-emerald-500 transition-all active:scale-95"
           >
-            免费体验
+            立即注册
           </button>
         </div>
 
         <div className="flex items-center gap-4 md:hidden">
-          <button 
+          <button
             onClick={toggleTheme}
-            className="p-2 text-ink/70 dark:text-white/70"
+            className="p-2 text-link/70 dark:text-white/70"
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
-          <button className="p-2 text-ink/70 dark:text-white/70" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          <button className="p-2 text-link/70 dark:text-white/70" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
             {isMobileMenuOpen ? <X /> : <Menu />}
           </button>
         </div>
@@ -85,9 +84,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
             className="absolute top-full left-0 right-0 bg-paper/95 dark:bg-black/95 backdrop-blur-xl border-b border-black/10 dark:border-white/10 flex flex-col p-6 gap-6 md:hidden overflow-hidden"
           >
             {navItems.map((item) => (
-              <a key={item.label} href={item.href} className="text-lg font-medium text-ink/70 dark:text-white/70" onClick={() => setIsMobileMenuOpen(false)}>{item.label}</a>
+              <a key={item.label} href={item.href} className="text-lg font-medium text-link/70 dark:text-white/70" onClick={() => setIsMobileMenuOpen(false)}>{item.label}</a>
             ))}
-            <button onClick={() => { setIsMobileMenuOpen(false); onAuthClick(); }} className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-xl">立即开始</button>
+            <button onClick={() => { setIsMobileMenuOpen(false); onAuthClick(); }} className="w-full py-3 bg-emerald-600 text-white font-semibold rounded-xl">立即注册</button>
           </MotionDiv>
         )}
       </AnimatePresence>
