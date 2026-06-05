@@ -1,5 +1,11 @@
-// P2 修复: 统一导出 MotionDiv，避免每个组件重复声明
-// 解决 framer-motion + TypeScript 的 'initial' property 类型错误
-import { motion } from 'framer-motion';
+import { motion, MotionProps } from 'framer-motion';
+import React from 'react';
 
-export const MotionDiv = motion.div as any;
+/**
+ * 共享 MotionDiv 组件
+ * P2 优化: 统一 framer-motion 的 motion.div 使用方式
+ */
+export const MotionDiv: React.FC<MotionProps & React.HTMLAttributes<HTMLDivElement>> = (props) => {
+  const { children, ...rest } = props;
+  return <motion.div {...rest}>{children}</motion.div>;
+};
