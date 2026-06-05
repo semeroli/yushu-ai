@@ -1,88 +1,55 @@
 <!DOCTYPE html>
-<html lang="zh-CN" class="dark">
+<html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- 站点验证 -->
-    <meta name="google-site-verification" content="ZQWOug9UxdJUHospm9e0r27AjqX5jqnfAp9kT31iZ_c" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>语枢AI - 让每一堂语文课充满智慧</title>
+  <meta name="description" content="语枢AI，专业的语文教学AI助手。古诗文鉴赏、教案生成、作文批改、阅读理解，让AI赋能语文教育。" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 
-    <!-- 基础 SEO -->
-    <title>语枢 AI - 智慧语文教学资源建设平台 | 老师的备课神器</title>
-    <meta name="description" content="语枢 AI 是专为语文教师打造的智慧教学平台。支持文言文精准解析、古诗词深度鉴赏、整本书阅读导图生成及智能教案编写。">
-    <meta name="keywords" content="语文教学, AI备课, 文言文翻译, 作文批改, 智慧教育, 语枢AI, 教案生成">
-    <meta name="author" content="语枢教育科技">
-    <link rel="canonical" href="https://yushuai.de5.net/" />
+  <!-- P1 修复: 防止主题闪烁 FOUC — 在所有 CSS 之前执行 -->
+  <script>
+    (function() {
+      try {
+        var theme = localStorage.getItem('theme') || 'dark';
+        document.documentElement.classList.add(theme);
+      } catch(e) {
+        document.documentElement.classList.add('dark');
+      }
+    })();
+  </script>
 
-    <!-- 图标配置：使用静态文件路径 -->
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-    <link rel="apple-touch-icon" href="/favicon.svg">
-    
-    <meta name="msapplication-TileColor" content="#059669">
-    <meta name="theme-color" content="#050505">
-
-    <!-- Open Graph / 社交分享 -->
-    <meta property="og:type" content="website">
-    <meta property="og:url" content="https://yushuai.de5.net/">
-    <meta property="og:title" content="语枢 AI - 让每一堂语文课都充满智慧与灵感">
-    <meta property="og:description" content="基于 Gemini 3 Pro 深度定制的语文教学引擎，助力教师高效产出教学资源。">
-    <meta property="og:image" content="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1200">
-    
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        paper: '#F7F3E8',
-                        ink: '#2C2C2C',
-                    }
-                }
-            }
-        }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Serif+SC:wght@400;700&display=swap" rel="stylesheet">
-    <style>
-        body { 
-            font-family: 'Inter', sans-serif; 
-            transition: background-color 0.3s ease, color 0.3s ease;
-        }
-        .dark body { background-color: #050505; color: #ffffff; }
-        body:not(.dark) { background-color: #F7F3E8; color: #2C2C2C; }
-        
-        .serif-zh { font-family: 'Noto Serif SC', serif; }
-        
-        .glass { 
-            background: rgba(255, 255, 255, 0.03); 
-            backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255, 255, 255, 0.05); 
-        }
-        .light-glass {
-            background: rgba(255, 255, 255, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
-    </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "clsx": "https://esm.sh/clsx@^2.1.1",
-    "tailwind-merge": "https://esm.sh/tailwind-merge@^3.4.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.37.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "framer-motion": "https://esm.sh/framer-motion@^12.27.0",
-    "vite": "https://esm.sh/vite@^7.3.1",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
-  }
-}
-</script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            paper: '#fafaf9',
+            link: '#1c1917',
+          },
+          fontFamily: {
+            serif: ['Noto Serif SC', 'serif'],
+          },
+        },
+      },
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700;900&display=swap');
+    .serif-zh { font-family: 'Noto Serif SC', serif; }
+    .glass { background: rgba(255,255,255,0.7); backdrop-filter: blur(16px); }
+    .dark .glass { background: rgba(0,0,0,0.3); }
+    .dark .dark\:glass { background: rgba(0,0,0,0.3); }
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
+    .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+  </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
 </body>
 </html>
