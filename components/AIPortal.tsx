@@ -5,140 +5,131 @@ import { generateTeachingResource, ToolType } from '../services/geminiService';
 import { MotionDiv } from '../lib/motion';
 
 interface Message {
- role: 'user' | 'assistant';
- content: string;
- type?: ToolType;
- images?: string[];
+  role: 'user' | 'assistant';
+  content: string;
+  type?: ToolType;
+  images?: string[];
 }
 
 const TOOLS = [
- { id: 'ancient', label: '古诗文鉴赏', icon: <Scroll className="w-4 h-4" />, color: 'text-orange-400' },
- { id: 'poetry', label: '诗词创作助手', icon: <Feather className="w-4 h-4" />, color: 'text-yellow-400' },
- { id: 'essay', label: '作文批改', icon: <PenTool className="w-4 h-4" />, color: 'text-pink-400' },
- { id: 'lesson', label: '教案生成', icon: <Library className="w-4 h-4" />, color: 'text-blue-400' },
- { id: 'reading', label: '阅读理解', icon: <BookOpen className="w-4 h-4" />, color: 'text-purple-400' },
+  { id: 'ancient', label: '古诗文鉴赏', icon: <Scroll className="w-4 h-4" />, color: 'text-orange-400' },
+  { id: 'poetry', label: '诗词创作助手', icon: <Feather className="w-4 h-4" />, color: 'text-yellow-400' },
+  { id: 'essay', label: '作文批改', icon: <PenTool className="w-4 h-4" />, color: 'text-pink-400' },
+  { id: 'lesson', label: '教案生成', icon: <Library className="w-4 h-4" />, color: 'text-blue-400' },
+  { id: 'reading', label: '阅读理解', icon: <BookOpen className="w-4 h-4" />, color: 'text-purple-400' },
 ];
 
-// P0 修复: 删除 declare global { Window.aistudio }
-// API Key 已移至后端，前端不再需要 AIStudio SDK
-
 export const AIPortal: React.FC = () => {
- const [messages, setMessages] = useState<Message[]>([
- { role: 'assistant', content: '你好！我是语枢AI助手，为你提供专业的语文教学辅助服务。我可以帮你进行古诗文鉴赏、教案生成、作文批改等多种功能。选择下方工具开始使用吧！' }
- ]);
- const [input, setInput] = useState('');
- const [isLoading, setIsLoading] = useState(false);
- const [activeTool, setActiveTool] = useState<ToolType>('general');
- const [isExpertMode, setIsExpertMode] = useState(false);
- const [copied, setCopied] = useState(false);
- const [selectedImages, setSelectedImages] = useState<string[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    { role: 'assistant', content: '你好！我是语枢AI助手，为你提供专业的语文教学辅助服务。我可以帮你进行古诗文鉴赏、教案生成、作文批改等多种功能。选择下方工具开始使用吧！' }
+  ]);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTool, setActiveTool] = useState<ToolType>('general');
+  const [isExpertMode, setIsExpertMode] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
- const scrollRef = useRef<HTMLDivElement>(null);
- const fileInputRef = useRef<HTMLInputElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
- useEffect(() => {
- if (scrollRef.current) {
- scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
- }
- }, [messages, isLoading, selectedImages]);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages, isLoading, selectedImages]);
 
- // P0 修复: 专家模式切换，启用 agnes-ai enable_thinking
- const toggleExpertMode = async () => {
- if (!isExpertMode) {
- setIsExpertMode(true);
- setMessages(prev => [...prev, {
- role: 'assistant',
- content: '✅ 专家模式已开启！现在你将使用更强大的模型获得更专业的教学资源生成服务。'
- }]);
- } else {
- setIsExpertMode(false);
- setMessages(prev => [...prev, { role: 'assistant', content: '已退出专家模式。' }]);
- }
- };
+  const toggleExpertMode = async () => {
+    if (!isExpertMode) {
+      setIsExpertMode(true);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '✅ 专家模式已开启！现在你将使用更强大的模型获得更专业的教学资源生成服务。'
+      }]);
+    } else {
+      setIsExpertMode(false);
+      setMessages(prev => [...prev, { role: 'assistant', content: '已退出专家模式。' }]);
+    }
+  };
 
- // P1 修复: 图片选择 — alert 替换为内联提示
- const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
- const files = Array.from(e.target.files || []);
- if (files.length === 0) return;
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
- if (selectedImages.length + files.length > 5) {
- setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ 附件数量不超过 5 张' }]);
- return;
- }
+    if (selectedImages.length + files.length > 5) {
+      setMessages(prev => [...prev, { role: 'assistant', content: '⚠️ 附件数量不超过 5 张' }]);
+      return;
+    }
 
- files.forEach(file => {
- if (file.size > 5 * 1024 * 1024) {
- setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 超过 5MB，请压缩后重试` }]);
- return;
- }
- const reader = new FileReader();
- reader.onloadend = () => {
- setSelectedImages(prev => [...prev, reader.result as string]);
- };
- // P1 修复: 添加 onerror 回调
- reader.onerror = () => {
- setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 读取失败，请重试` }]);
- };
- reader.readAsDataURL(file);
- });
- };
+    files.forEach(file => {
+      if (file.size > 5 * 1024 * 1024) {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 超过 5MB，请压缩后重试` }]);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImages(prev => [...prev, reader.result as string]);
+      };
+      reader.onerror = () => {
+        setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 读取失败，请重试` }]);
+      };
+      reader.readAsDataURL(file);
+    });
+  };
 
- const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
- const textToSend = overridePrompt || input;
- const typeToUse = forceType || activeTool;
- const imagesToSend = [...selectedImages];
+  const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
+    const textToSend = overridePrompt || input;
+    const typeToUse = forceType || activeTool;
+    const imagesToSend = [...selectedImages];
 
- if ((!textToSend.trim() && imagesToSend.length === 0) || isLoading) return;
+    if ((!textToSend.trim() && imagesToSend.length === 0) || isLoading) return;
 
- setInput('');
- setSelectedImages([]);
- if (fileInputRef.current) fileInputRef.current.value = '';
+    setInput('');
+    setSelectedImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
 
- setMessages(prev => [...prev, {
- role: 'user',
- content: textToSend,
- type: typeToUse,
- images: imagesToSend.length > 0 ? imagesToSend : undefined
- }]);
- setIsLoading(true);
+    setMessages(prev => [...prev, {
+      role: 'user',
+      content: textToSend,
+      type: typeToUse,
+      images: imagesToSend.length > 0 ? imagesToSend : undefined
+    }]);
+    setIsLoading(true);
 
- // P0 修复: 调用后端代理 /api/generate，转发至 agnes-ai
- const response = await generateTeachingResource(textToSend, typeToUse, isExpertMode, imagesToSend.length > 0 ? imagesToSend : undefined);
+    const response = await generateTeachingResource(textToSend, typeToUse, isExpertMode, imagesToSend.length > 0 ? imagesToSend : undefined);
 
- if (response === 'ERROR_KEY_INVALID') {
- setIsExpertMode(false);
- setMessages(prev => [...prev, {
- role: 'assistant',
- content: '🔑 服务密钥无效，请联系管理员更新配置。'
- }]);
- } else {
- setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
- }
- setIsLoading(false);
- };
+    if (response === 'ERROR_KEY_INVALID') {
+      setIsExpertMode(false);
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: '🔑 服务密钥无效，请联系管理员更新配置。'
+      }]);
+    } else {
+      setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
+    }
+    setIsLoading(false);
+  };
 
- // P1 修复: 剪贴板复制添加降级方案
- const handleCopy = async (text: string) => {
- try {
- await navigator.clipboard.writeText(text);
- setCopied(true);
- setTimeout(() => setCopied(false), 2000);
- } catch {
- // 降级: execCommand
- const textarea = document.createElement('textarea');
- textarea.value = text;
- textarea.style.position = 'fixed';
- textarea.style.opacity = '0';
- document.body.appendChild(textarea);
- textarea.select();
- document.execCommand('copy');
- document.body.removeChild(textarea);
- setCopied(true);
- setTimeout(() => setCopied(false), 2000);
- }
- };
+  const handleCopy = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
- return (
+  return (
  <section id="experience" className="py-12 md:py-24 px-4 md:px-6 relative">
  <div className="max-w-5xl mx-auto">
  <div className="flex flex-col md:flex-row md:items-end justify-between mb-8 md:mb-12 gap-6">
@@ -183,5 +174,6 @@ export const AIPortal: React.FC = () => {
 
  <div className="glass dark:glass rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-black/10 dark:border-white/10 shadow-2xl flex flex-col h-[70vh] md:h-[650px] relative bg-white/40 dark:bg-black/20">
  <div className="p-3 md:p-4 border-b border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 flex items-center justify-between">
- <div className="flex items-center gap-2 
+ <div className="flex items-center gap-2 md:gap-3">
+ <div className={`w-7 h-7 md:w-8 md:h-
 ...(truncated)...
