@@ -1,7 +1,7 @@
 /**
  * Cloudflare Pages Function - AI 生成接口
  * 路由: POST /api/generate
- * 平台: Cloudflare Pages (非 Netlify)
+ * 平台: Cloudflare Pages
  */
 
 const AGNES_API_BASE = 'https://apihub.agnes-ai.com/v1';
@@ -16,7 +16,7 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
     '你是一位古典文献学专家，精通文字学与训诂学。请对输入的文言文进行：\n' +
     '1. 精准翻译（先字对字直译，再给出通顺的白话文翻译）\n' +
     '2. 重点实词解析（一词多义、古今异义、通假字）\n' +
-    '3. 虚词用法说明（之、乎者、也、以、而等）\n' +
+    '3. 虚词用法说明（之、乎、者、也、以、而等）\n' +
     '4. 提取文中的文化常识（官职、地理、礼制、典故）与艺术特色（修辞、手法、意境）\n' +
     '请用清晰的结构化方式输出，便于老师直接用于课堂教学。',
 
@@ -80,21 +80,33 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
     }
 
-    // 选择模型
-    const model = images && images.length > 0 ? 'agnes-image-2.1-flash' : 'agnes-2.0-flash';
+    // 统一使用 agnes-2.0-flash（支持多模态）
+    const model = 'agnes-2.0-flash';
 
     // 构建用户消息内容（支持图片）
-    const userContent: any[] = [{ type: 'text', text: prompt }];
+    const userContent: any[] = [];
+
+    // 如果有图片，提示模型先识别文字
     if (images && images.length > 0) {
+      userContent.push({
+        type: 'text',
+        text: `${prompt}\n\n（如果上传了图片，请先识别图片中的文字内容，再进行分析。）`,
+      });
+
+      // 添加图片
       for (const img of images) {
-        // Agnes Image API 支持 base64 data URL 格式
-        if (img.startsWith('data:image/')) {
-          userContent.push({
-            type: 'image_url',
-            image_url: { url: img },
-          });
+        // 确保是完整的 data URL 格式
+        let imageUrl = img;
+        if (!imageUrl.startsWith('data:image/')) {
+          imageUrl = `data:image/jpeg;base64,${imageUrl}`;
         }
+        userContent.push({
+          type: 'image_url',
+          image_url: { url: imageUrl },
+        });
       }
+    } else {
+      userContent.push({ type: 'text', text: prompt });
     }
 
     const messages = [
@@ -112,6 +124,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     if (isExpertMode) {
       requestBody.chat_template_kwargs = { enable_thinking: true };
     }
+
+    console.log('Calling Agnes API with model:', model, '| Images:', images?.length || 0);
 
     // 调用 Agnes API
     const apiResponse = await fetch(`${AGNES_API_BASE}/chat/completions`, {
@@ -142,7 +156,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const result = data.choices?.[0]?.message?.content || '';
 
     if (!result) {
-      // 返回原始响应以便调试
       return new Response(JSON.stringify({ error: 'Empty response', raw: JSON.stringify(data).slice(0, 500) }), {
         status: 502,
         headers: { 'Content-Type': 'application/json' },
