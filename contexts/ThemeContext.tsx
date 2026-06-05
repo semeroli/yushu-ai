@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'dark' | 'light';
@@ -41,3 +40,21 @@ export const useTheme = () => {
   }
   return context;
 };
+
+/**
+ * P1 修复: 防止主题闪烁 (FOUC)
+ * 在 index.html 的 <head> 中添加以下内联脚本（在所有 CSS 之前）：
+ * 
+ * <script>
+ *   (function() {
+ *     try {
+ *       var theme = localStorage.getItem('theme') || 'dark';
+ *       document.documentElement.classList.add(theme);
+ *     } catch(e) {
+ *       document.documentElement.classList.add('dark');
+ *     }
+ *   })();
+ * </script>
+ * 
+ * 这样在 React 水合之前就能正确设置主题类名，避免白屏闪烁。
+ */
