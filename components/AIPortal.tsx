@@ -48,6 +48,7 @@ export const AIPortal: React.FC = () => {
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [ocrText, setOcrText] = useState<string>('');
   const [showOcrResult, setShowOcrResult] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -157,6 +158,7 @@ export const AIPortal: React.FC = () => {
       return;
     }
 
+    setIsCompressing(true);
     for (const file of files) {
       if (file.size > 10 * 1024 * 1024) {
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 超过 10MB，无法处理` }]);
@@ -169,77 +171,35 @@ export const AIPortal: React.FC = () => {
         setMessages(prev => [...prev, { role: 'assistant', content: `⚠️ 图片 ${file.name} 处理失败，请重试` }]);
       }
     }
+    setIsCompressing(false);
   };
 
-  // 处理不同工具的图片模式
+  // 图片模式：一步完成（不再分 OCR+生成 两步）
   const handleImageTool = async () => {
     const imagesToSend = [...selectedImages];
     if (imagesToSend.length === 0 || isLoading) return;
 
-    // 生成提示词
-    const toolPrompts: Record<string, string> = {
-      essay: '请识别图片中的作文内容',
-      poetry: '请识别图片中的诗词内容',
-      ancient: '请识别图片中的古诗文内容',
-      lesson: '请识别图片中的教案内容',
-      reading: '请识别图片中的阅读材料内容',
-    };
-    const ocrPrompt = input.trim() || toolPrompts[activeTool] || '请识别图片中的文字内容';
-
-    setMessages(prev => [...prev, {
-      role: 'user',
-      content: ocrPrompt,
-      type: activeTool,
-      images: imagesToSend
-    }]);
-    setIsLoading(true);
-
-    // 根据工具类型决定是否需要先 OCR
-    const needOCR = ['essay'].includes(activeTool);
-
-    let ocrResult = '';
-    if (needOCR) {
-      // 作文批改：先 OCR 获取文字，用户确认后再生成
-      ocrResult = await ocrImages(imagesToSend, ocrPrompt);
-      if (ocrResult === 'ERROR_KEY_INVALID') {
-        setIsExpertMode(false);
-        setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
-        setIsLoading(false);
-        return;
-      }
-      if (ocrResult) {
-        setOcrText(ocrResult);
-        setShowOcrResult(true);
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: `📄 **识别到的内容：**\n\n${ocrResult}\n\n---\n\n请确认文字内容是否正确，然后点击下方「开始批阅」按钮。`,
-        }]);
-        setIsLoading(false);
-        return;
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: '❌ 文字识别失败，将直接传图分析...' }]);
-        // fallback 继续走下面的直接生成流程
-      }
-    }
-
-    // 直接生成（无 OCR 或其他工具类型）
-    setSelectedImages([]);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
-
     // 生成工具专属提示词
-    const toolGeneratePrompts: Record<string, string> = {
+    const toolPrompts: Record<string, string> = {
       essay: '请详细批阅这篇作文，包括语言表达、立意深度、结构逻辑和素材运用四个方面，并给出预估分数（40-100分）和具体修改建议。',
       poetry: '请鉴赏图片中的诗词，包括创作背景、艺术特色、情感意境和语言技巧等方面。',
       ancient: '请鉴赏图片中的古诗文，包括出处背景、字词解释、句意翻译、情感主旨和艺术手法等方面。',
       lesson: '请根据图片内容设计一份教案，包括教学目标、重难点、教学过程和板书设计等环节。',
       reading: '请根据图片中的阅读材料，出几道阅读理解题目并给出答案和解析。',
     };
-    const genPrompt = input.trim() || toolGeneratePrompts[activeTool] || '请分析这张图片的内容。';
+    const genPrompt = input.trim() || toolPrompts[activeTool] || '请分析这张图片的内容。';
+
+    // 清空输入和图片
+    setInput('');
+    setSelectedImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
 
     setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: '✨ 正在分析，请稍候...',
+      role: 'user',
+      content: genPrompt,
+      type: activeTool,
+      images: imagesToSend
     }]);
     setIsLoading(true);
 
@@ -247,8 +207,7 @@ export const AIPortal: React.FC = () => {
       genPrompt,
       activeTool,
       isExpertMode,
-      imagesToSend,
-      ocrResult || undefined
+      imagesToSend
     );
 
     if (response === 'ERROR_KEY_INVALID') {
@@ -258,56 +217,9 @@ export const AIPortal: React.FC = () => {
       setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
     }
     setIsLoading(false);
-    setOcrText('');
   };
 
-  // 第一步：OCR 识别图片文字（仅作文批改需要）
-  const handleOCR = async () => {
-    await handleImageTool();
-  };
 
-  // 第二步：生成批阅意见（仅作文批改需要）
-  const handleGenerate = async () => {
-    if (isLoading || !ocrText) return;
-
-    const typeToUse = activeTool;
-    let textToSend = input.trim();
-    if (!textToSend) {
-      textToSend = '请详细批阅这篇作文，包括语言表达、立意深度、结构逻辑和素材运用四个方面，并给出预估分数（40-100分）和具体修改建议。';
-    }
-
-    setInput('');
-    setSelectedImages([]);
-    setShowOcrResult(false);
-    if (fileInputRef.current) fileInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
-
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: '📝 正在生成批阅意见，请稍候...',
-    }]);
-    setIsLoading(true);
-
-    const response = await generateTeachingResource(
-      textToSend,
-      typeToUse,
-      isExpertMode,
-      undefined,
-      ocrText
-    );
-
-    if (response === 'ERROR_KEY_INVALID') {
-      setIsExpertMode(false);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '🔑 服务密钥无效，请联系管理员更新配置。'
-      }]);
-    } else {
-      setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
-    }
-    setIsLoading(false);
-    setOcrText('');
-  };
 
   const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
     const textToSend = overridePrompt || input;
@@ -485,7 +397,7 @@ export const AIPortal: React.FC = () => {
                   </div>
                   <div className="p-4 md:p-5 rounded-2xl bg-white/80 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-center gap-3">
                     <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-[10px] md:text-xs text-link/40 dark:text-white/40 tracking-widest">语枢正在为你生成教学资源...</span>
+                    <span className="text-[10px] md:text-xs text-link/40 dark:text-white/40 tracking-widest">语枢正在为你分析...</span>
                   </div>
                 </MotionDiv>
               )}
@@ -499,7 +411,7 @@ export const AIPortal: React.FC = () => {
                   initial={{ opacity: 0, height: 0, marginBottom: 0 }}
                   animate={{ opacity: 1, height: 'auto', marginBottom: 12 }}
                   exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-                  className="flex flex-wrap gap-3"
+                  className="flex flex-wrap gap-3 items-center"
                 >
                   {selectedImages.map((img, index) => (
                     <div key={index} className="relative inline-block">
@@ -516,6 +428,12 @@ export const AIPortal: React.FC = () => {
                       </div>
                     </div>
                   ))}
+                  {isCompressing && (
+                    <span className="text-[10px] md:text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      压缩中...
+                    </span>
+                  )}
                 </MotionDiv>
               )}
             </AnimatePresence>
@@ -569,28 +487,21 @@ export const AIPortal: React.FC = () => {
                   className="flex-1 bg-transparent outline-none text-sm resize-none max-h-32 text-link dark:text-white placeholder:text-link/30 dark:placeholder:text-white/30"
                   rows={1}
                 />
-                {showOcrResult && ocrText ? (
-                  <button
-                    onClick={() => handleGenerate()}
-                    disabled={isLoading}
-                    className="px-4 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-500 transition-all disabled:opacity-30 shrink-0 shadow-md shadow-purple-600/20 mb-0.5 flex items-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    <span className="text-sm font-medium">开始批阅</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSend()}
-                    disabled={isLoading || (!input.trim() && selectedImages.length === 0)}
-                    className="p-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:hover:bg-emerald-600 shrink-0 shadow-md shadow-emerald-600/20 mb-0.5"
-                  >
-                    {selectedImages.length > 0 && !showOcrResult ? (
-                      <span className="text-sm font-medium px-2">识别文字</span>
-                    ) : (
-                      <Send className="w-4 h-4" />
-                    )}
-                  </button>
-                )}
+                <button
+                  onClick={() => handleSend()}
+                  disabled={isLoading || isCompressing || (!input.trim() && selectedImages.length === 0)}
+                  className="p-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:hover:bg-emerald-600 shrink-0 shadow-md shadow-emerald-600/20 mb-0.5"
+                >
+                  {isCompressing ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : isLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : selectedImages.length > 0 ? (
+                    <span className="text-sm font-medium px-2">分析图片</span>
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
               </div>
               <p className="text-center text-[10px] text-link/20 dark:text-white/20 px-2">
                 AI 生成内容仅供参考，请结合实际情况进行判断和修改
