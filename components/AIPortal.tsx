@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, Camera, Lock, ChevronDown, BarChart3, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateTeachingResource, ToolType, GradeType } from '../services/geminiService';
@@ -171,8 +171,6 @@ export const AIPortal: React.FC = () => {
   const [showGradeMenu, setShowGradeMenu] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState<GradeType>('junior');
   const [essayScores, setEssayScores] = useState<EssayScores | null>(null);
-  const [isLocked, setIsLocked] = useState(!!import.meta.env.VITE_ACCESS_CODE);
-  const [accessCodeInput, setAccessCodeInput] = useState('');
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -216,15 +214,6 @@ export const AIPortal: React.FC = () => {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isLoading, selectedImages, essayScores]);
-
-  const handleUnlock = () => {
-    if (accessCodeInput === import.meta.env.VITE_ACCESS_CODE) {
-      setIsLocked(false);
-      localStorage.setItem('yushu-access', accessCodeInput);
-    } else {
-      alert('访问码错误，请重试');
-    }
-  };
 
   const handleClearHistory = () => {
     setMessages([{ role: 'assistant', content: '对话已清空，开始新的对话吧！' }]);
@@ -346,8 +335,6 @@ export const AIPortal: React.FC = () => {
     if (response === 'ERROR_KEY_INVALID') {
       setIsExpertMode(false);
       setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
-    } else if (response === 'ACCESS_CODE_INVALID') {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⛔ 访问码无效。' }]);
     } else {
       const scores = parseEssayScores(response);
       setEssayScores(scores);
@@ -382,8 +369,6 @@ export const AIPortal: React.FC = () => {
     if (response === 'ERROR_KEY_INVALID') {
       setIsExpertMode(false);
       setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
-    } else if (response === 'ACCESS_CODE_INVALID') {
-      setMessages(prev => [...prev, { role: 'assistant', content: '⛔ 访问码无效。' }]);
     } else {
       const scores = parseEssayScores(response);
       setEssayScores(scores);
@@ -409,39 +394,6 @@ export const AIPortal: React.FC = () => {
       setTimeout(() => setCopied(false), 2000);
     }
   };
-
-  // ========== 访问码锁定界面 ==========
-  if (isLocked) {
-    return (
-      <section className="py-12 md:py-24 px-4 relative">
-        <div className="max-w-md mx-auto mt-24">
-          <div className="flex flex-col items-center gap-6 text-center">
-            <div className="w-20 h-20 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-              <Lock className="w-10 h-10 text-emerald-500" />
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold mb-2">语枢 AI 助手</h3>
-              <p className="text-link/50 dark:text-white/50 text-sm">请输入访问码以继续使用</p>
-            </div>
-            <input
-              type="password"
-              value={accessCodeInput}
-              onChange={e => setAccessCodeInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleUnlock()}
-              placeholder="输入访问码..."
-              className="w-full px-4 py-3 rounded-xl border border-black/10 dark:border-white/20 bg-white/50 dark:bg-white/5 text-center text-lg tracking-widest focus:outline-none focus:border-emerald-500"
-            />
-            <button
-              onClick={handleUnlock}
-              className="w-full px-6 py-3 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-500 transition-colors"
-            >
-              进入
-            </button>
-          </div>
-        </div>
-      </section>
-    );
-  }
 
   return (
     <section id="experience" className="py-12 md:py-24 px-4 md:px-6 relative">
