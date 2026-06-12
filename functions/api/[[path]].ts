@@ -119,7 +119,11 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 
 interface Env {
   AGNES_API_KEY?: string;
+  ACCESS_CODE?: string;
+  HEIC_RESIZER_URL?: string;
 }
+
+type GradeType = 'primary' | 'junior' | 'senior' | 'college';
 
 // 调用 Agnes API 的通用函数
 async function callAgnesAPI(
@@ -178,7 +182,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       action?: 'ocr' | 'generate';
       ocrText?: string;
     };
-    const { prompt, toolType = 'general', isExpertMode = false, images, ocrText } = body;
+    const { prompt, toolType = 'general', isExpertMode = false, images, ocrText, grade = 'junior', accessCode } = body as any;
+
+    // 访问码验证
+    if (env.ACCESS_CODE && accessCode !== env.ACCESS_CODE) {
+      return new Response(JSON.stringify({ error: 'Invalid access code' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     if (!prompt?.trim() && !ocrText?.trim() && !images?.length) {
       return new Response(JSON.stringify({ error: 'Missing prompt' }), {
@@ -224,8 +236,23 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
     }
 
+    // 年级对应的评分基准
+    const gradeBenchmarks: Record<GradeType, string> = {
+      primary: '小学五、六年级标准：语言通顺、基本完整即可评分，不要求深度立意',
+      junior: '初中标准：要求有一定立意深度，素材运用较合理',
+      senior: '高中标准：要求立意深刻、结构严谨、素材丰富新颖',
+      college: '大学标准：要求学术性、批判性思维、独到见解',
+    };
+    const benchmark = gradeBenchmarks[grade as GradeType] || gradeBenchmarks.junior;
+
+    const systemContent = TOOL_PROMPTS[toolType] || TOOL_PROMPTS.general;
+    // 作文提示词加上年级基准
+    const finalSystem = toolType === 'essay'
+      ? systemContent.replace('请从四个维度批改作文', `请从四个维度批改作文。评分标准：${benchmark}`)
+      : systemContent;
+
     const messages = [
-      { role: 'system', content: TOOL_PROMPTS[toolType] || TOOL_PROMPTS.general },
+      { role: 'system', content: finalSystem },
       { role: 'user', content: userContent },
     ];
 
