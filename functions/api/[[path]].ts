@@ -182,11 +182,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       action?: 'ocr' | 'generate';
       ocrText?: string;
     };
-    const { prompt, toolType = 'general', isExpertMode = false, images, ocrText, grade = 'junior', accessCode } = body as any;
+    const { prompt, toolType = 'general', isExpertMode = false, images, ocrText, grade = 'junior' } = body as any;
 
     // 访问码验证
     if (env.ACCESS_CODE && accessCode !== env.ACCESS_CODE) {
-      return new Response(JSON.stringify({ error: 'Invalid access code', debug: { received: accessCode, expected: env.ACCESS_CODE, receivedLen: accessCode?.length, expectedLen: env.ACCESS_CODE?.length, charCodes: accessCode?.split('').map(c => c.charCodeAt(0)) } }), {
+      return new Response(JSON.stringify({ error: 'Invalid access code' }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' },
       });
