@@ -12,6 +12,7 @@
   "dependencies": {
     "@netlify/functions": "^2.6.0",
     "framer-motion": "^12.26.2",
+    "heic2any": "^0.0.4",
     "lucide-react": "^0.562.0",
     "marked": "^9.x.x",
     "react": "^19.0.0",
