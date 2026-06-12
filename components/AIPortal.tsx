@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, FileText } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, FileText, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateTeachingResource, ocrImages, ToolType } from '../services/geminiService';
 import { MotionDiv } from '../lib/motion';
@@ -51,6 +51,7 @@ export const AIPortal: React.FC = () => {
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -71,59 +72,80 @@ export const AIPortal: React.FC = () => {
     }
   };
 
-  // 压缩图片：限制最大宽度/高度，降低质量，控制 base64 大小
-  const compressImage = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        img.src = e.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Canvas context not available'));
-            return;
+  // HEIC 转换函数
+  const convertHeic = async (file: File): Promise<File> => {
+    try {
+      const heic2any = (await import('heic2any')).default;
+      const blob = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.85 });
+      return new File([blob], file.name.replace(/\.heic$/i, '.jpg'), { type: 'image/jpeg' });
+    } catch {
+      return file; // 转换失败返回原文件
+    }
+  };
+
+  // 压缩图片：限制最大宽度/高度，降低质量，控制 base64 大小，支持 HEIC
+  const compressImage = async (file: File): Promise<string> => {
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.src = objectUrl;
+
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = async () => {
+        // Canvas 无法解码（可能是 HEIC），尝试 heic2any
+        if (file.type === 'image/heic' || file.type === 'image/heif' || file.name.toLowerCase().endsWith('.heic')) {
+          try {
+            const converted = await convertHeic(file);
+            img.src = URL.createObjectURL(converted);
+            img.onload = () => resolve();
+            img.onerror = () => reject(new Error('HEIC conversion failed'));
+          } catch {
+            reject(new Error('Image load failed'));
           }
-
-          // 限制最大尺寸 1200px（保持比例）
-          const maxSize = 1200;
-          let { width, height } = img;
-          if (width > maxSize || height > maxSize) {
-            if (width > height) {
-              height = Math.round((height * maxSize) / width);
-              width = maxSize;
-            } else {
-              width = Math.round((width * maxSize) / height);
-              height = maxSize;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // 先尝试 quality 0.8，如果还太大再降到 0.6
-          let quality = 0.8;
-          let dataUrl = canvas.toDataURL('image/jpeg', quality);
-
-          // 如果超过 500KB，降低质量
-          const base64Length = dataUrl.length - 'data:image/jpeg;base64,'.length;
-          const sizeInBytes = (base64Length * 3) / 4;
-          if (sizeInBytes > 500 * 1024) {
-            quality = 0.6;
-            dataUrl = canvas.toDataURL('image/jpeg', quality);
-          }
-
-          resolve(dataUrl);
-        };
-        img.onerror = () => reject(new Error('Image load failed'));
+        } else {
+          reject(new Error('Image load failed'));
+        }
       };
-      reader.onerror = () => reject(new Error('File read failed'));
-      reader.readAsDataURL(file);
     });
+
+    URL.revokeObjectURL(objectUrl);
+
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('Canvas context not available');
+
+    // 限制最大尺寸 2048px（保持比例）
+    const maxSize = 2048;
+    let { width, height } = img;
+    if (width > maxSize || height > maxSize) {
+      if (width > height) {
+        height = Math.round((height * maxSize) / width);
+        width = maxSize;
+      } else {
+        width = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+    }
+
+    canvas.width = width;
+    canvas.height = height;
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+
+    // 先尝试 quality 0.85，如果还太大再降到 0.6
+    let quality = 0.85;
+    let dataUrl = canvas.toDataURL('image/jpeg', quality);
+
+    // 如果超过 1MB，降低质量
+    const base64Length = dataUrl.length - 'data:image/jpeg;base64,'.length;
+    const sizeInBytes = (base64Length * 3) / 4;
+    if (sizeInBytes > 1024 * 1024) {
+      quality = 0.6;
+      dataUrl = canvas.toDataURL('image/jpeg', quality);
+    }
+
+    return dataUrl;
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,6 +230,7 @@ export const AIPortal: React.FC = () => {
     setSelectedImages([]);
     setShowOcrResult(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
 
     setMessages(prev => [...prev, {
       role: 'assistant',
@@ -259,6 +282,7 @@ export const AIPortal: React.FC = () => {
     setInput('');
     setSelectedImages([]);
     if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
 
     setMessages(prev => [...prev, {
       role: 'user',
@@ -462,6 +486,21 @@ export const AIPortal: React.FC = () => {
                   onChange={handleFileSelect}
                   className="hidden"
                 />
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  ref={cameraInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="p-2 rounded-lg transition-colors shrink-0 mb-0.5 text-link/40 dark:text-white/40 hover:text-link dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10"
+                  title="拍照上传"
+                >
+                  <Camera className="w-5 h-5" />
+                </button>
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   className={`p-2 rounded-lg transition-colors shrink-0 mb-0.5 ${
