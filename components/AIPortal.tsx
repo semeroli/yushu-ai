@@ -171,58 +171,108 @@ export const AIPortal: React.FC = () => {
     }
   };
 
-  // 第一步：OCR 识别图片文字
-  const handleOCR = async () => {
-    const textToSend = input;
+  // 处理不同工具的图片模式
+  const handleImageTool = async () => {
     const imagesToSend = [...selectedImages];
-
     if (imagesToSend.length === 0 || isLoading) return;
+
+    // 生成提示词
+    const toolPrompts: Record<string, string> = {
+      essay: '请识别图片中的作文内容',
+      poetry: '请识别图片中的诗词内容',
+      ancient: '请识别图片中的古诗文内容',
+      lesson: '请识别图片中的教案内容',
+      reading: '请识别图片中的阅读材料内容',
+    };
+    const ocrPrompt = input.trim() || toolPrompts[activeTool] || '请识别图片中的文字内容';
 
     setMessages(prev => [...prev, {
       role: 'user',
-      content: textToSend || '请识别图片中的作文内容',
+      content: ocrPrompt,
       type: activeTool,
       images: imagesToSend
     }]);
     setIsLoading(true);
 
-    const ocrResult = await ocrImages(imagesToSend, textToSend || '请识别图片中的文字内容');
+    // 根据工具类型决定是否需要先 OCR
+    const needOCR = ['essay'].includes(activeTool);
 
-    if (ocrResult === 'ERROR_KEY_INVALID') {
-      setIsExpertMode(false);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: '🔑 服务密钥无效，请联系管理员更新配置。'
-      }]);
-      setIsLoading(false);
-      return;
+    let ocrResult = '';
+    if (needOCR) {
+      // 作文批改：先 OCR 获取文字，用户确认后再生成
+      ocrResult = await ocrImages(imagesToSend, ocrPrompt);
+      if (ocrResult === 'ERROR_KEY_INVALID') {
+        setIsExpertMode(false);
+        setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
+        setIsLoading(false);
+        return;
+      }
+      if (ocrResult) {
+        setOcrText(ocrResult);
+        setShowOcrResult(true);
+        setMessages(prev => [...prev, {
+          role: 'assistant',
+          content: `📄 **识别到的内容：**\n\n${ocrResult}\n\n---\n\n请确认文字内容是否正确，然后点击下方「开始批阅」按钮。`,
+        }]);
+        setIsLoading(false);
+        return;
+      } else {
+        setMessages(prev => [...prev, { role: 'assistant', content: '❌ 文字识别失败，将直接传图分析...' }]);
+        // fallback 继续走下面的直接生成流程
+      }
     }
 
-    if (ocrResult) {
-      setOcrText(ocrResult);
-      setShowOcrResult(true);
-      setMessages(prev => [...prev, {
-        role: 'assistant',
-        content: `📄 **识别到的作文原文：**\n\n${ocrResult}\n\n---\n\n请确认文字内容是否正确，然后点击「开始批阅」按钮。`,
-      }]);
+    // 直接生成（无 OCR 或其他工具类型）
+    setSelectedImages([]);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
+
+    // 生成工具专属提示词
+    const toolGeneratePrompts: Record<string, string> = {
+      essay: '请详细批阅这篇作文，包括语言表达、立意深度、结构逻辑和素材运用四个方面，并给出预估分数（40-100分）和具体修改建议。',
+      poetry: '请鉴赏图片中的诗词，包括创作背景、艺术特色、情感意境和语言技巧等方面。',
+      ancient: '请鉴赏图片中的古诗文，包括出处背景、字词解释、句意翻译、情感主旨和艺术手法等方面。',
+      lesson: '请根据图片内容设计一份教案，包括教学目标、重难点、教学过程和板书设计等环节。',
+      reading: '请根据图片中的阅读材料，出几道阅读理解题目并给出答案和解析。',
+    };
+    const genPrompt = input.trim() || toolGeneratePrompts[activeTool] || '请分析这张图片的内容。';
+
+    setMessages(prev => [...prev, {
+      role: 'assistant',
+      content: '✨ 正在分析，请稍候...',
+    }]);
+    setIsLoading(true);
+
+    const response = await generateTeachingResource(
+      genPrompt,
+      activeTool,
+      isExpertMode,
+      imagesToSend,
+      ocrResult || undefined
+    );
+
+    if (response === 'ERROR_KEY_INVALID') {
+      setIsExpertMode(false);
+      setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
     } else {
-      setMessages(prev => [...prev, { role: 'assistant', content: '❌ 文字识别失败，请重试或手动输入。' }]);
+      setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
     }
     setIsLoading(false);
+    setOcrText('');
   };
 
-  // 第二步：生成批阅意见
+  // 第一步：OCR 识别图片文字（仅作文批改需要）
+  const handleOCR = async () => {
+    await handleImageTool();
+  };
+
+  // 第二步：生成批阅意见（仅作文批改需要）
   const handleGenerate = async () => {
-    if (isLoading) return;
+    if (isLoading || !ocrText) return;
 
     const typeToUse = activeTool;
-
-    // 有 ocrText 时不需要再传图片，避免请求体过大
-    const imagesToSend = ocrText ? [] : [...selectedImages];
-
-    // input 为空时有 ocrText 就用默认批阅提示词
     let textToSend = input.trim();
-    if (ocrText && !textToSend) {
+    if (!textToSend) {
       textToSend = '请详细批阅这篇作文，包括语言表达、立意深度、结构逻辑和素材运用四个方面，并给出预估分数（40-100分）和具体修改建议。';
     }
 
@@ -242,7 +292,7 @@ export const AIPortal: React.FC = () => {
       textToSend,
       typeToUse,
       isExpertMode,
-      imagesToSend.length > 0 ? imagesToSend : undefined,
+      undefined,
       ocrText
     );
 
@@ -266,15 +316,9 @@ export const AIPortal: React.FC = () => {
 
     if ((!textToSend.trim() && imagesToSend.length === 0) || isLoading) return;
 
-    // 如果有图片且还没 OCR，先 OCR
-    if (imagesToSend.length > 0 && !showOcrResult) {
-      await handleOCR();
-      return;
-    }
-
-    // 如果已经 OCR 过了，直接生成
-    if (showOcrResult && ocrText) {
-      await handleGenerate();
+    // 有图片时统一走 handleImageTool
+    if (imagesToSend.length > 0) {
+      await handleImageTool();
       return;
     }
 
