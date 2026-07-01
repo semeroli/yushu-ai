@@ -351,12 +351,12 @@ export const AIPortal: React.FC = () => {
     const imagesToSend = [...selectedImages];
 
     if ((!textToSend.trim() && !imagesToSend.length) || isLoading) return;
-
     if (imagesToSend.length > 0) {
       await handleImageTool();
       return;
     }
 
+    setIsLoading(true);
     setInput('');
     setSelectedImages([]);
     setEssayScores(null);
@@ -419,6 +419,7 @@ export const AIPortal: React.FC = () => {
 
     const scores = parseEssayScores(streamedContent);
     setEssayScores(scores);
+    setIsLoading(false);
   };
 
   const handleCopy = async (text: string) => {
@@ -571,7 +572,7 @@ export const AIPortal: React.FC = () => {
                   </div>
                 </MotionDiv>
               )}
-              {essayScores && !isLoading && (
+              {essayScores && (
                 <MotionDiv initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="flex justify-start">
                   <div className="bg-white/80 dark:bg-white/5 border border-black/5 dark:border-white/10 rounded-2xl p-4 shadow-sm">
                     <RadarChart scores={essayScores} languageScore={essayScores.language} insightScore={essayScores.insight} structureScore={essayScores.structure} materialScore={essayScores.material} />
