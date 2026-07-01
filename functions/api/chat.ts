@@ -3,7 +3,7 @@
  * 路由: POST /api/chat
  * 平台: Cloudflare Pages
  *
- * 功能：
+ * 功能:
  * - 流式输出（SSE），打字机体验
  * - 支持普通模式 / 专家模式（深度思考）
  * - IP 级别速率限制（复用 [[path]].ts 的 KV/内存降级逻辑）
@@ -12,7 +12,7 @@
 
 const SENSENOVA_BASE = 'https://token.sensenova.cn/v1';
 
-// ================== 速率限制（复用内存 Map）====================
+// ================== 速率限制（复用内存 Map，无需 KV）===================
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX = 30;  // 文本对话频率可稍高
@@ -50,15 +50,18 @@ const SECURE_HEADERS: Record<string, string> = {
   'Referrer-Policy': 'strict-origin-when-cross-origin',
 };
 
-function jsonResponse(data: unknown, status: number): Response {
-  return new Response(JSON.stringify(data), { status, headers: SECURE_HEADERS });
+function jsonResponse(data: unknown, status: number, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { ...SECURE_HEADERS, ...extraHeaders },
+  });
 }
 
 // ================== Env ==================
 interface Env {
   SENSENOVA_API_KEY?: string;
-  SENSENOVA_MODEL?: string;        // 默认 deepseek-v4-flash
-  SENSENOVA_THINKING_API_KEY?: string;  // 专家模式用 deepseek-v4-pro
+  SENSENOVA_MODEL?: string;             // 默认 deepseek-v4-flash
+  SENSENOVA_THINKING_API_KEY?: string;   // 专家模式用 deepseek-v4-pro
 }
 
 // ================== 主处理 ==================
@@ -105,7 +108,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       }
       apiMessages.push({ role: 'user', content: prompt });
     } else {
-      return jsonResponse({ error: 'INVALID_REQUEST', message: 'messages 或 prompt 必须至少提供一个。' }, 400);
+      return jsonResponse({ error: 'INVALID_REQUEST', message: 'messages 或 prompt 至少必须提供一个。' }, 400);
     }
 
     // 选择模型
@@ -113,7 +116,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       ? (env.SENSENOVA_THINKING_API_KEY ? (env.SENSENOVA_MODEL?.replace('flash', 'pro') || 'deepseek-v4-pro') : 'deepseek-v4-flash')
       : (env.SENSENOVA_API_KEY ? (env.SENSENOVA_MODEL || 'deepseek-v4-flash') : 'deepseek-v4-flash');
 
-    const apiKey = isExpertMode ? (env.SENSENOVA_THINKING_API_KEY || env.SENSENOVA_API_KEY) : env.SENSENOVA_API_KEY;
+    const apiKey = isExpertMode
+      ? (env.SENSENOVA_THINKING_API_KEY || env.SENSENOVA_API_KEY)
+      : env.SENSENOVA_API_KEY;
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -125,7 +130,6 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 专家模式：开启深度思考
     if (isExpertMode) {
-      // SenseNova / DeepSeek V4 原生思考参数
       requestBody.reasoning_level = 'high';
     }
 
@@ -171,15 +175,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 将上游 SSE 透传给客户端，同时注入安全头
     const encoder = new TextEncoder();
-    const stream_ = apiRes.body;
+    const upstream = apiRes.body;
     const readable = new ReadableStream({
       async start(controller) {
-        const reader = stream_.getReader();
+        const reader = upstream.getReader();
         const decoder = new TextDecoder();
 
         // 先发送安全头（在 SSE data 之前一次性发送）
-        const safeHeaders = `X-RateLimit-Remaining: ${rl.remaining}\nX-RateLimit-Limit: ${RATE_LIMIT_MAX}\n\n`;
-        controller.enqueue(encoder.encode(safeHeaders));
+        const safePrefix = `data: [SAFE_HEADER]X-RateLimit-Remaining:${rl.remaining}|X-RateLimit-Limit:${RATE_LIMIT_MAX}\n\n`;
+        controller.enqueue(encoder.encode(safePrefix));
 
         try {
           while (true) {
