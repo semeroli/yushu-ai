@@ -1,7 +1,8 @@
 ﻿import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, Camera, Lock, ChevronDown, BarChart3, Trash2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Loader2, Scroll, PenTool, BookOpen, Library, Copy, Check, Feather, Image as ImageIcon, XCircle, ShieldCheck, Zap, Camera, Lock, ChevronDown, BarChart3, Trash2, Cpu } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { generateTeachingResource, ToolType, GradeType } from '../services/geminiService';
+import { chat as senseNovaChat, TOOL_PROMPTS } from '../services/senseNovaService';
 import { MotionDiv } from '../lib/motion';
 
 interface Message {
@@ -9,6 +10,7 @@ interface Message {
   content: string;
   type?: ToolType;
   images?: string[];
+  streaming?: boolean;  // 是否正在流式输出中（打字机效果）
 }
 
 interface EssayScores {
@@ -361,20 +363,62 @@ export const AIPortal: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
     if (cameraInputRef.current) cameraInputRef.current.value = '';
 
-    setMessages(prev => [...prev, { role: 'user', content: textToSend, type: typeToUse }]);
-    setIsLoading(true);
+    // 构建带上下文的对话（限制最近 20 条避免 token 爆炸）
+    const systemContent = TOOL_PROMPTS[typeToUse] || TOOL_PROMPTS.general;
+    const recentMessages = messages.slice(-20);
+    const historyMessages = recentMessages
+      .filter(m => m.role !== 'user' || m.content.length > 0)
+      .map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    const fullMessages = [
+      { role: 'system' as const, content: systemContent },
+      ...historyMessages,
+      { role: 'user' as const, content: textToSend },
+    ];
 
-    const response = await generateTeachingResource(textToSend, typeToUse, isExpertMode, undefined, undefined, selectedGrade);
+    // 添加用户消息 + 空 assistant 占位（流式输出目标）
+    const userMsgAdded: Message[] = [{ role: 'user', content: textToSend, type: typeToUse }];
+    const assistantMsg: Message = { role: 'assistant', content: '', streaming: true };
+    setMessages(prev => [...prev, ...userMsgAdded, assistantMsg]);
 
-    if (response === 'ERROR_KEY_INVALID') {
-      setIsExpertMode(false);
-      setMessages(prev => [...prev, { role: 'assistant', content: '🔑 服务密钥无效，请联系管理员更新配置。' }]);
-    } else {
-      const scores = parseEssayScores(response);
-      setEssayScores(scores);
-      setMessages(prev => [...prev, { role: 'assistant', content: response || '服务暂时不可用，请稍后再试。' }]);
-    }
-    setIsLoading(false);
+    let streamedContent = '';
+    await senseNovaChat({
+      messages: fullMessages,
+      isExpertMode,
+      onChunk: (chunk) => {
+        streamedContent += chunk;
+        setMessages(prev => {
+          const updated = [...prev];
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].streaming) { updated[i] = { ...updated[i], content: streamedContent }; break; }
+          }
+          return updated;
+        });
+      },
+      onError: (errMsg) => {
+        setMessages(prev => {
+          const updated = [...prev];
+          for (let i = updated.length - 1; i >= 0; i--) {
+            if (updated[i].streaming) { updated[i] = { role: 'assistant', content: errMsg, streaming: false }; break; }
+          }
+          return updated;
+        });
+      },
+    });
+
+    // 结束流式状态
+    setMessages(prev => {
+      const updated = [...prev];
+      for (let i = updated.length - 1; i >= 0; i--) {
+        if (updated[i].streaming) {
+          updated[i] = { role: 'assistant', content: streamedContent || '服务暂时不可用，请稍后再试。', streaming: false };
+          break;
+        }
+      }
+      return updated;
+    });
+
+    const scores = parseEssayScores(streamedContent);
+    setEssayScores(scores);
   };
 
   const handleCopy = async (text: string) => {
@@ -513,6 +557,7 @@ export const AIPortal: React.FC = () => {
                     <div className={`p-4 md:p-5 rounded-2xl text-xs md:text-sm leading-relaxed relative group ${msg.role === 'user' ? 'bg-emerald-700 text-white rounded-tr-none shadow-lg shadow-emerald-900/10' : 'bg-white/80 dark:bg-white/5 border border-black/5 dark:border-white/10 text-link dark:text-white/90 prose prose-invert max-w-none rounded-tl-none shadow-sm'}`}>
                       <div className="whitespace-pre-wrap font-sans">
                         {msg.role === 'assistant' ? cleanMarkdown(msg.content) : msg.content}
+                        {msg.streaming && <span className="inline-block w-0.5 h-4 ml-0.5 bg-emerald-500 align-middle animate-pulse" />}
                       </div>
                       {msg.role === 'assistant' && i > 0 && (
                         <button
@@ -523,17 +568,6 @@ export const AIPortal: React.FC = () => {
                         </button>
                       )}
                     </div>
-                  </div>
-                </MotionDiv>
-              ))}
-              {isLoading && (
-                <MotionDiv initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-4">
-                  <div className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 flex items-center justify-center shrink-0">
-                    <Bot className="w-4 h-4 text-link/40 dark:text-white/40" />
-                  </div>
-                  <div className="p-4 md:p-5 rounded-2xl bg-white/80 dark:bg-white/5 border border-black/5 dark:border-white/10 flex items-center gap-3">
-                    <Loader2 className="w-3 h-3 md:w-4 md:h-4 animate-spin text-emerald-600 dark:text-emerald-400" />
-                    <span className="text-[10px] md:text-xs text-link/40 dark:text-white/40 tracking-widest">语枢正在为你分析...</span>
                   </div>
                 </MotionDiv>
               )}
