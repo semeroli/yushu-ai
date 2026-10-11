@@ -5,6 +5,45 @@
  */
 
 const ZHIPU_BASE = 'https://open.bigmodel.cn/api/paas/v4';
+const MODELSCOPE_BASE = 'https://api-inference.modelscope.cn/v1';
+
+type AIProvider = 'zhipu' | 'modelscope';
+interface AISettings {
+  provider: AIProvider;
+  base: string;
+  apiKey?: string;
+  model: string;
+  visionModel: string;
+  expertModel: string;
+  keyEnv: string;
+}
+
+// 根据环境变量决定用哪个大模型供应商。
+// AI_PROVIDER=modelscope 时走魔塔社区（免费模型）；缺省走智谱。
+// 两者均为 OpenAI 兼容接口，请求/响应格式一致。
+function resolveAISettings(env: any): AISettings {
+  const provider = (env.AI_PROVIDER || 'zhipu').toString().toLowerCase();
+  if (provider === 'modelscope') {
+    return {
+      provider: 'modelscope',
+      base: MODELSCOPE_BASE,
+      apiKey: env.MODELSCOPE_API_KEY,
+      model: env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+      visionModel: env.MODELSCOPE_VISION_MODEL || 'Qwen/Qwen2.5-VL-7B-Instruct',
+      expertModel: env.MODELSCOPE_EXPERT_MODEL || env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+      keyEnv: 'MODELSCOPE_API_KEY',
+    };
+  }
+  return {
+    provider: 'zhipu',
+    base: ZHIPU_BASE,
+    apiKey: env.ZHIPU_API_KEY,
+    model: env.ZHIPU_MODEL || 'glm-4-flash',
+    visionModel: env.ZHIPU_VISION_MODEL || 'glm-4v-plus',
+    expertModel: env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash',
+    keyEnv: 'ZHIPU_API_KEY',
+  };
+}
 
 type ToolType = 'general' | 'ancient' | 'poetry' | 'lesson' | 'reading' | 'essay';
 
@@ -118,14 +157,20 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 // 旧的 OCR 专用提示词已合并到主流程，不再单独使用
 
 interface Env {
+  AI_PROVIDER?: string;          // 'zhipu'（默认）| 'modelscope'
   ZHIPU_API_KEY?: string;
   ZHIPU_MODEL?: string;          // 纯文本 / 对话默认模型（如 glm-4-flash）
   ZHIPU_VISION_MODEL?: string;   // 含图片时使用的视觉模型（如 glm-4v-plus）
   ZHIPU_EXPERT_MODEL?: string;   // 专家模式使用的更强模型（可选，缺省回退到默认模型）
+  MODELSCOPE_API_KEY?: string;
+  MODELSCOPE_MODEL?: string;          // 魔塔文本默认模型
+  MODELSCOPE_VISION_MODEL?: string;   // 魔塔视觉默认模型
+  MODELSCOPE_EXPERT_MODEL?: string;   // 魔塔专家模型（可选）
 }
 
-// 调用智谱大模型（OpenAI 兼容接口）的通用函数
-async function callZhipu(
+// 调用大模型（OpenAI 兼容接口，智谱 / 魔塔通用）
+async function callOpenAI(
+  base: string,
   apiKey: string,
   messages: any[],
   model: string,
@@ -139,7 +184,7 @@ async function callZhipu(
     temperature,
   };
 
-  const apiResponse = await fetch(`${ZHIPU_BASE}/chat/completions`, {
+  const apiResponse = await fetch(`${base}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -161,8 +206,9 @@ async function callZhipu(
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  if (!env.ZHIPU_API_KEY) {
-    return new Response(JSON.stringify({ error: 'KEY_INVALID', debug: 'ZHIPU_API_KEY not set in env' }), {
+  const ai = resolveAISettings(env);
+  if (!ai.apiKey) {
+    return new Response(JSON.stringify({ error: 'KEY_INVALID', debug: `${ai.keyEnv} not set in env` }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -232,13 +278,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     const hasImages = images && images.length > 0;
     const model = hasImages
-      ? (env.ZHIPU_VISION_MODEL || 'glm-4v-plus')
-      : (isExpertMode
-          ? (env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash')
-          : (env.ZHIPU_MODEL || 'glm-4-flash'));
+      ? ai.visionModel
+      : (isExpertMode ? ai.expertModel : ai.model);
 
-    const result = await callZhipu(
-      env.ZHIPU_API_KEY,
+    const result = await callOpenAI(
+      ai.base,
+      ai.apiKey as string,
       messages,
       model,
       isExpertMode ? 4096 : 2048,

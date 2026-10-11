@@ -11,6 +11,45 @@
  */
 
 const ZHIPU_BASE = 'https://open.bigmodel.cn/api/paas/v4';
+const MODELSCOPE_BASE = 'https://api-inference.modelscope.cn/v1';
+
+type AIProvider = 'zhipu' | 'modelscope';
+interface AISettings {
+  provider: AIProvider;
+  base: string;
+  apiKey?: string;
+  model: string;
+  visionModel: string;
+  expertModel: string;
+  keyEnv: string;
+}
+
+// 根据环境变量决定用哪个大模型供应商。
+// AI_PROVIDER=modelscope 时走魔塔社区（免费模型）；缺省走智谱。
+// 两者均为 OpenAI 兼容接口，请求/响应格式一致。
+function resolveAISettings(env: any): AISettings {
+  const provider = (env.AI_PROVIDER || 'zhipu').toString().toLowerCase();
+  if (provider === 'modelscope') {
+    return {
+      provider: 'modelscope',
+      base: MODELSCOPE_BASE,
+      apiKey: env.MODELSCOPE_API_KEY,
+      model: env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+      visionModel: env.MODELSCOPE_VISION_MODEL || 'Qwen/Qwen2.5-VL-7B-Instruct',
+      expertModel: env.MODELSCOPE_EXPERT_MODEL || env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
+      keyEnv: 'MODELSCOPE_API_KEY',
+    };
+  }
+  return {
+    provider: 'zhipu',
+    base: ZHIPU_BASE,
+    apiKey: env.ZHIPU_API_KEY,
+    model: env.ZHIPU_MODEL || 'glm-4-flash',
+    visionModel: env.ZHIPU_VISION_MODEL || 'glm-4v-plus',
+    expertModel: env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash',
+    keyEnv: 'ZHIPU_API_KEY',
+  };
+}
 
 // ================== 速率限制（复用内存 Map，无需 KV）===================
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
@@ -59,9 +98,14 @@ function jsonResponse(data: unknown, status: number, extraHeaders: Record<string
 
 // ================== Env ==================
 interface Env {
+  AI_PROVIDER?: string;          // 'zhipu'（默认）| 'modelscope'
   ZHIPU_API_KEY?: string;
   ZHIPU_MODEL?: string;          // 普通模式默认模型（如 glm-4-flash）
   ZHIPU_EXPERT_MODEL?: string;   // 专家模式使用的更强模型（可选，缺省回退到默认模型）
+  MODELSCOPE_API_KEY?: string;
+  MODELSCOPE_MODEL?: string;          // 魔塔文本默认模型
+  MODELSCOPE_VISION_MODEL?: string;   // 魔塔视觉默认模型
+  MODELSCOPE_EXPERT_MODEL?: string;   // 魔塔专家模型（可选）
 }
 
 // ================== 主处理 ==================
@@ -78,9 +122,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     return jsonResponse({ error: 'RATE_LIMIT_EXCEEDED', message: '请求过于频繁，请稍后再试。' }, 429);
   }
 
-  // API Key 检查
-  if (!env.ZHIPU_API_KEY) {
-    return jsonResponse({ error: 'SERVICE_ERROR' }, 503, rlHeaders);
+  // 供应商与 Key 检查
+  const ai = resolveAISettings(env);
+  if (!ai.apiKey) {
+    return jsonResponse({ error: 'SERVICE_ERROR', message: `${ai.keyEnv} 未配置` }, 503, rlHeaders);
   }
 
   try {
@@ -112,11 +157,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // 选择模型
-    const model = isExpertMode
-      ? (env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash')
-      : (env.ZHIPU_MODEL || 'glm-4-flash');
-
-    const apiKey = env.ZHIPU_API_KEY;
+    const model = isExpertMode ? ai.expertModel : ai.model;
+    const apiKey = ai.apiKey as string;
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -128,7 +170,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 非流式：直接返回
     if (!stream) {
-      const apiRes = await fetch(`${ZHIPU_BASE}/chat/completions`, {
+      const apiRes = await fetch(`${ai.base}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -138,7 +180,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
 
       if (!apiRes.ok) {
-        console.error('Zhipu API error:', apiRes.status);
+        console.error('Upstream API error:', apiRes.status);
         return jsonResponse({ error: 'SERVICE_ERROR' }, 502);
       }
 
@@ -148,7 +190,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // 流式：代理 SSE
-    const apiRes = await fetch(`${ZHIPU_BASE}/chat/completions`, {
+    const apiRes = await fetch(`${ai.base}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
