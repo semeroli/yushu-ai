@@ -8,3 +8,8 @@ database_name = "yushu-ai"
 database_id = "6155c91e-22b0-4a06-8b68-f5d12acac0fa"
 
 # 登录注册与管理员体系已接入：/api/auth/* + 前端门禁（自 commit e8baf2f 起）
+
+# 启用 ReadableStream 构造器：/api/chat 的 SSE 流式代理需要。
+# 否则运行时报 "To use the new ReadableStream() constructor, enable the
+# streams_enable_constructors compatibility flag"。
+compatibility_flags = ["streams_enable_constructors"]
