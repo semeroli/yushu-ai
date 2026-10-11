@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { generateTeachingResource, ToolType, GradeType } from '../services/geminiService';
 import { chat as senseNovaChat, TOOL_PROMPTS } from '../services/senseNovaService';
 import { MotionDiv } from '../lib/motion';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -159,7 +160,7 @@ const RadarChart: React.FC<{ scores: EssayScores; languageScore: number; insight
   );
 };
 
-export const AIPortal: React.FC = () => {
+export const AIPortal: React.FC<{ onRequireAuth?: () => void }> = ({ onRequireAuth }) => {
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', content: '你好！我是语枢AI助手，为你提供专业的语文教学辅助服务。我可以帮你进行古诗文鉴赏、教案生成、作文批改等多种功能。选择下方工具开始使用吧！' }
   ]);
@@ -173,6 +174,9 @@ export const AIPortal: React.FC = () => {
   const [showGradeMenu, setShowGradeMenu] = useState(false);
   const [selectedGrade, setSelectedGrade] = useState<GradeType>('junior');
   const [essayScores, setEssayScores] = useState<EssayScores | null>(null);
+
+  const { user, loading } = useAuth();
+  const locked = !loading && !user;
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -307,6 +311,7 @@ export const AIPortal: React.FC = () => {
 
   // 图片模式
   const handleImageTool = async () => {
+    if (locked) return;
     const imagesToSend = [...selectedImages];
     if (!imagesToSend.length || isLoading) return;
 
@@ -346,6 +351,7 @@ export const AIPortal: React.FC = () => {
   };
 
   const handleSend = async (overridePrompt?: string, forceType?: ToolType) => {
+    if (locked) return;
     const textToSend = overridePrompt || input;
     const typeToUse = forceType || activeTool;
     const imagesToSend = [...selectedImages];
@@ -506,6 +512,18 @@ export const AIPortal: React.FC = () => {
         </div>
 
         <div className="glass dark:glass rounded-[1.5rem] md:rounded-[2rem] overflow-hidden border border-black/10 dark:border-white/10 shadow-2xl flex flex-col h-[70vh] md:h-[650px] relative bg-white/40 dark:bg-black/20">
+          {locked && (
+            <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-white/85 dark:bg-black/55 backdrop-blur-sm rounded-[1.5rem] md:rounded-[2rem]">
+              <Lock className="w-10 h-10 text-emerald-500" />
+              <p className="text-sm text-link dark:text-white/80">登录后即可使用语枢AI助手</p>
+              <button
+                onClick={onRequireAuth}
+                className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-all"
+              >
+                登录 / 注册
+              </button>
+            </div>
+          )}
           <div className="p-3 md:p-4 border-b border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
               <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center transition-colors ${isExpertMode ? 'bg-purple-600' : 'bg-emerald-600'}`}>
@@ -640,6 +658,7 @@ export const AIPortal: React.FC = () => {
                 <textarea
                   value={input}
                   onChange={e => setInput(e.target.value)}
+                  disabled={locked}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   placeholder={`输入${TOOLS.find(t => t.id === activeTool)?.label || '通用'}相关内容...`}
                   className="flex-1 bg-transparent outline-none text-sm resize-none max-h-32 text-link dark:text-white placeholder:text-link/30 dark:placeholder:text-white/30"
@@ -647,7 +666,7 @@ export const AIPortal: React.FC = () => {
                 />
                 <button
                   onClick={() => handleSend()}
-                  disabled={isLoading || isCompressing || (!input.trim() && !selectedImages.length)}
+                  disabled={isLoading || isCompressing || locked || (!input.trim() && !selectedImages.length)}
                   className="p-2.5 rounded-xl bg-emerald-600 text-white hover:bg-emerald-500 transition-all disabled:opacity-30 disabled:hover:bg-emerald-600 shrink-0 shadow-md shadow-emerald-600/20 mb-0.5"
                 >
                   {isCompressing || isLoading ? (

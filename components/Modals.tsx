@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ShieldCheck, Mail, Lock, User, ArrowRight } from 'lucide-react';
+import { X, ShieldCheck, Mail, Lock, User, ArrowRight, Loader2 } from 'lucide-react';
 import { MotionDiv } from '../lib/motion';
+import { useAuth } from '../contexts/AuthContext';
 
 interface ModalProps {
   isOpen: boolean;
@@ -41,7 +42,6 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
         </div>
       </div>
       <div className="flex flex-col items-center gap-4 py-4">
-        {/* P1: 标注二维码为示意，防止用户误扫 */}
         <div className="relative p-3 bg-white rounded-2xl w-48 h-48 shadow-inner border border-black/5">
           <img
             src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WeChatPay_Placeholder"
@@ -65,29 +65,104 @@ export const PaymentModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
   </BaseModal>
 );
 
-// P1 修复: 登录弹窗改为"即将上线"提示，不再收集表单数据
-export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => (
-  <BaseModal isOpen={isOpen} onClose={onClose} title="语枢AI助手">
-    <div className="space-y-4">
-      <div className="text-center py-8">
-        <div className="w-16 h-16 bg-emerald-500/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <User className="w-8 h-8 text-emerald-500" />
+// 登录 / 注册 真实表单（接 /api/auth/*）
+export const AuthModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
+  const { login, register } = useAuth();
+  const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const reset = () => {
+    setEmail('');
+    setPassword('');
+    setError('');
+  };
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError('请输入有效的邮箱地址');
+      return;
+    }
+    if (password.length < 8) {
+      setError('密码至少 8 位');
+      return;
+    }
+    setBusy(true);
+    try {
+      if (tab === 'login') await login(email, password);
+      else await register(email, password);
+      reset();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '操作失败，请重试');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <BaseModal isOpen={isOpen} onClose={onClose} title="语枢AI 账号">
+      <div className="space-y-4">
+        <div className="flex rounded-xl bg-black/5 dark:bg-white/5 p-1">
+          <button
+            type="button"
+            onClick={() => { setTab('login'); setError(''); }}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'login' ? 'bg-emerald-600 text-white' : 'text-link/60 dark:text-white/60'}`}
+          >
+            登录
+          </button>
+          <button
+            type="button"
+            onClick={() => { setTab('register'); setError(''); }}
+            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'register' ? 'bg-emerald-600 text-white' : 'text-link/60 dark:text-white/60'}`}
+          >
+            注册
+          </button>
         </div>
-        <h4 className="text-lg font-bold mb-2 text-link dark:text-white">登录功能即将上线</h4>
-        <p className="text-sm text-link/50 dark:text-white/50 leading-relaxed max-w-xs mx-auto">
-          我们正在开发安全可靠的用户认证系统，届时将支持账号密码和第三方登录。<br />
-          当前可免费使用基础功能。
+
+        <form onSubmit={submit} className="space-y-3">
+          <div className="relative">
+            <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-link/40 dark:text-white/40" />
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="邮箱"
+              autoComplete="email"
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] text-sm text-link dark:text-white outline-none focus:border-emerald-500/50"
+            />
+          </div>
+          <div className="relative">
+            <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-link/40 dark:text-white/40" />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="密码（至少 8 位）"
+              autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+              className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.03] text-sm text-link dark:text-white outline-none focus:border-emerald-500/50"
+            />
+          </div>
+
+          {error && <p className="text-xs text-red-500">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-3 bg-emerald-600 text-white rounded-xl text-sm font-bold hover:bg-emerald-500 transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+          >
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : (tab === 'login' ? '登录' : '注册并登录')}
+          </button>
+        </form>
+
+        <p className="text-center text-[10px] text-link/30 dark:text-white/30 px-6">
+          登录后即可使用语枢AI助手全部功能
         </p>
       </div>
-      <button
-        onClick={onClose}
-        className="w-full py-3 bg-emerald-600 dark:bg-emerald-500 text-white dark:text-black font-bold rounded-xl flex items-center justify-center gap-2 group mt-4 hover:bg-emerald-500 dark:hover:bg-emerald-400 transition-all"
-      >
-        暂不登录，继续使用 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-      </button>
-      <p className="text-center text-[10px] text-link/20 dark:text-white/20 px-6">
-        如需提前体验登录功能，请联系 lablab@qq.com
-      </p>
-    </div>
-  </BaseModal>
-);
+    </BaseModal>
+  );
+};
