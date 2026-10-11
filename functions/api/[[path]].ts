@@ -12,10 +12,19 @@ interface AISettings {
   provider: AIProvider;
   base: string;
   apiKey?: string;
-  model: string;
-  visionModel: string;
-  expertModel: string;
   keyEnv: string;
+  textModels: string[];
+  visionModels: string[];
+  expertModels: string[];
+}
+
+// 解析逗号分隔的模型列表；为空则用内置默认链（按顺序尝试，先成功者胜）
+function parseList(raw: any, fallback: string[]): string[] {
+  const list = String(raw || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return list.length ? list : fallback;
 }
 
 // 根据环境变量决定用哪个大模型供应商。
@@ -24,24 +33,35 @@ interface AISettings {
 function resolveAISettings(env: any): AISettings {
   const provider = (env.AI_PROVIDER || 'zhipu').toString().toLowerCase();
   if (provider === 'modelscope') {
+    // 默认链取自「实测可用」的魔塔免费模型（2026-10-10 校准）
+    const text = parseList(env.MODELSCOPE_MODEL, [
+      'Qwen/Qwen3.8-Flash-Next',
+      'deepseek-ai/DeepSeek-V4.1-Flash',
+      'Shanghai_AI_Laboratory/Intern-S2-Preview',
+    ]);
+    const vision = parseList(env.MODELSCOPE_VISION_MODEL, [
+      'deepseek-ai/DeepSeek-V4-Flash-Vision-Exp',
+      'Shanghai_AI_Laboratory/Intern-S2-Preview',
+    ]);
     return {
       provider: 'modelscope',
       base: MODELSCOPE_BASE,
       apiKey: env.MODELSCOPE_API_KEY,
-      model: env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
-      visionModel: env.MODELSCOPE_VISION_MODEL || 'Qwen/Qwen2.5-VL-7B-Instruct',
-      expertModel: env.MODELSCOPE_EXPERT_MODEL || env.MODELSCOPE_MODEL || 'Qwen/Qwen2.5-7B-Instruct',
       keyEnv: 'MODELSCOPE_API_KEY',
+      textModels: text,
+      visionModels: vision,
+      expertModels: parseList(env.MODELSCOPE_EXPERT_MODEL, text),
     };
   }
+  const text = parseList(env.ZHIPU_MODEL, ['glm-4-flash']);
   return {
     provider: 'zhipu',
     base: ZHIPU_BASE,
     apiKey: env.ZHIPU_API_KEY,
-    model: env.ZHIPU_MODEL || 'glm-4-flash',
-    visionModel: env.ZHIPU_VISION_MODEL || 'glm-4v-plus',
-    expertModel: env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash',
     keyEnv: 'ZHIPU_API_KEY',
+    textModels: text,
+    visionModels: parseList(env.ZHIPU_VISION_MODEL, ['glm-4v-plus']),
+    expertModels: parseList(env.ZHIPU_EXPERT_MODEL, text),
   };
 }
 
@@ -168,39 +188,53 @@ interface Env {
   MODELSCOPE_EXPERT_MODEL?: string;   // 魔塔专家模型（可选）
 }
 
-// 调用大模型（OpenAI 兼容接口，智谱 / 魔塔通用）
+// 调用大模型（OpenAI 兼容接口，智谱 / 魔塔通用）。
+// 传入模型候选链，按顺序尝试：上游非 2xx 或超时都换下一个，全部失败才抛错。
+// 用 AbortController 给每次尝试设上限，避免上游"挂着不回"把请求拖到被平台掐断（CF 502）。
 async function callOpenAI(
   base: string,
   apiKey: string,
+  models: string[],
   messages: any[],
-  model: string,
   maxTokens: number,
   temperature: number
 ): Promise<string> {
-  const requestBody: Record<string, any> = {
-    model,
-    messages,
-    max_tokens: maxTokens,
-    temperature,
-  };
+  let lastErr = '';
+  for (const model of models) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 45000);
+    try {
+      const apiResponse = await fetch(`${base}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({ model, messages, max_tokens: maxTokens, temperature }),
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
 
-  const apiResponse = await fetch(`${base}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
-  });
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json().catch(() => ({}));
+        const note = JSON.stringify(errorData).slice(0, 200);
+        console.error(`Upstream ${model} error ${apiResponse.status}:`, note);
+        lastErr = `${model} -> HTTP ${apiResponse.status} ${note}`;
+        continue;
+      }
 
-  if (!apiResponse.ok) {
-    const errorData = await apiResponse.json().catch(() => ({}));
-    console.error('Zhipu API error:', apiResponse.status, errorData);
-    throw new Error(`API error: ${apiResponse.status}`);
+      const data = await apiResponse.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (content) return content;
+      lastErr = `${model} -> 返回内容为空`;
+    } catch (e: any) {
+      clearTimeout(timer);
+      const reason = e?.name === 'AbortError' ? '超时' : String(e?.message || e);
+      console.error(`Upstream ${model} failed:`, reason);
+      lastErr = `${model} -> ${reason}`;
+    }
   }
-
-  const data = await apiResponse.json();
-  return data.choices?.[0]?.message?.content || '';
+  throw new Error(`所有模型均失败：${lastErr || '未知原因'}`);
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -253,15 +287,15 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       finalPrompt = `${imageGuide[toolType] || imageGuide.general}\n\n${finalPrompt}`;
     }
 
-    const userContent: any[] = [{ type: 'text', text: finalPrompt }];
+    const hasImages = !!(images && images.length > 0);
 
-    // 有图片时直接传给模型（一步完成识别+分析）
-    if (images && images.length > 0) {
-      for (const img of images) {
-        let imageUrl = img;
-        if (!imageUrl.startsWith('data:image/')) {
-          imageUrl = `data:image/jpeg;base64,${imageUrl}`;
-        }
+    // 纯文本请求 content 用字符串（部分平台不接受纯文本走数组格式）；
+    // 含图片时才用 OpenAI 多模态数组格式。
+    let userContent: any = finalPrompt;
+    if (hasImages) {
+      userContent = [{ type: 'text', text: finalPrompt }];
+      for (const img of images!) {
+        const imageUrl = img.startsWith('data:image/') ? img : `data:image/jpeg;base64,${img}`;
         userContent.push({
           type: 'image_url',
           image_url: { url: imageUrl },
@@ -274,18 +308,17 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       { role: 'user', content: userContent },
     ];
 
-    console.log('Generate: toolType=', toolType, '| hasOCR=', !!ocrText, '| images=', images?.length || 0);
+    console.log('Generate: toolType=', toolType, '| hasOCR=', !!ocrText, '| images=', images?.length || 0, '| provider=', ai.provider);
 
-    const hasImages = images && images.length > 0;
-    const model = hasImages
-      ? ai.visionModel
-      : (isExpertMode ? ai.expertModel : ai.model);
+    const modelList = hasImages
+      ? ai.visionModels
+      : (isExpertMode ? ai.expertModels : ai.textModels);
 
     const result = await callOpenAI(
       ai.base,
       ai.apiKey as string,
+      modelList,
       messages,
-      model,
       isExpertMode ? 4096 : 2048,
       isExpertMode ? 0.7 : 0.9
     );
