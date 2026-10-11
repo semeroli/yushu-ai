@@ -166,32 +166,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return jsonResponse({ error: 'EMPTY_RESPONSE' }, 502);
     }
 
-    // 将上游 SSE 透传给客户端，同时注入安全头
-    const encoder = new TextEncoder();
-    const upstream = apiRes.body;
-    const readable = new ReadableStream({
-      async start(controller) {
-        const reader = upstream.getReader();
-        const decoder = new TextDecoder();
-
-        // 先发送安全头（在 SSE data 之前一次性发送）
-        const safePrefix = `data: [SAFE_HEADER]X-RateLimit-Remaining:${rl.remaining}|X-RateLimit-Limit:${RATE_LIMIT_MAX}\n\n`;
-        controller.enqueue(encoder.encode(safePrefix));
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            controller.enqueue(value);
-          }
-          controller.close();
-        } catch (e) {
-          controller.error(e);
-        }
-      },
-    });
-
-    return new Response(readable, {
+    // 将上游 SSE 直接透传给客户端：直接返回上游响应体，
+    // 不再自行构造 ReadableStream（避免依赖 streams_enable_constructors 兼容标志，
+    // 该标志在 Cloudflare Pages 中常需去控制台手动开启，不可靠）。
+    // 前端 SSE 解析器对非 data: 行天然容错，去掉前缀 SAFE_HEADER 不影响功能。
+    return new Response(apiRes.body, {
       status: 200,
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
