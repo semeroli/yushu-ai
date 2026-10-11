@@ -4,7 +4,7 @@
  * 平台: Cloudflare Pages
  */
 
-const AGNES_API_BASE = 'https://apihub.agnes-ai.com/v1';
+const ZHIPU_BASE = 'https://open.bigmodel.cn/api/paas/v4';
 
 type ToolType = 'general' | 'ancient' | 'poetry' | 'lesson' | 'reading' | 'essay';
 
@@ -118,29 +118,28 @@ const TOOL_PROMPTS: Record<ToolType, string> = {
 // 旧的 OCR 专用提示词已合并到主流程，不再单独使用
 
 interface Env {
-  AGNES_API_KEY?: string;
+  ZHIPU_API_KEY?: string;
+  ZHIPU_MODEL?: string;          // 纯文本 / 对话默认模型（如 glm-4-flash）
+  ZHIPU_VISION_MODEL?: string;   // 含图片时使用的视觉模型（如 glm-4v-plus）
+  ZHIPU_EXPERT_MODEL?: string;   // 专家模式使用的更强模型（可选，缺省回退到默认模型）
 }
 
-// 调用 Agnes API 的通用函数
-async function callAgnesAPI(
+// 调用智谱大模型（OpenAI 兼容接口）的通用函数
+async function callZhipu(
   apiKey: string,
   messages: any[],
+  model: string,
   maxTokens: number,
-  temperature: number,
-  isExpertMode: boolean
+  temperature: number
 ): Promise<string> {
   const requestBody: Record<string, any> = {
-    model: 'agnes-2.0-flash',
+    model,
     messages,
     max_tokens: maxTokens,
     temperature,
   };
 
-  if (isExpertMode) {
-    requestBody.chat_template_kwargs = { enable_thinking: true };
-  }
-
-  const apiResponse = await fetch(`${AGNES_API_BASE}/chat/completions`, {
+  const apiResponse = await fetch(`${ZHIPU_BASE}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -151,7 +150,7 @@ async function callAgnesAPI(
 
   if (!apiResponse.ok) {
     const errorData = await apiResponse.json().catch(() => ({}));
-    console.error('Agnes API error:', apiResponse.status, errorData);
+    console.error('Zhipu API error:', apiResponse.status, errorData);
     throw new Error(`API error: ${apiResponse.status}`);
   }
 
@@ -162,8 +161,8 @@ async function callAgnesAPI(
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
-  if (!env.AGNES_API_KEY) {
-    return new Response(JSON.stringify({ error: 'KEY_INVALID', debug: 'AGNES_API_KEY not set in env' }), {
+  if (!env.ZHIPU_API_KEY) {
+    return new Response(JSON.stringify({ error: 'KEY_INVALID', debug: 'ZHIPU_API_KEY not set in env' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -231,12 +230,19 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     console.log('Generate: toolType=', toolType, '| hasOCR=', !!ocrText, '| images=', images?.length || 0);
 
-    const result = await callAgnesAPI(
-      env.AGNES_API_KEY,
+    const hasImages = images && images.length > 0;
+    const model = hasImages
+      ? (env.ZHIPU_VISION_MODEL || 'glm-4v-plus')
+      : (isExpertMode
+          ? (env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash')
+          : (env.ZHIPU_MODEL || 'glm-4-flash'));
+
+    const result = await callZhipu(
+      env.ZHIPU_API_KEY,
       messages,
+      model,
       isExpertMode ? 4096 : 2048,
-      isExpertMode ? 0.7 : 0.9,
-      isExpertMode
+      isExpertMode ? 0.7 : 0.9
     );
 
     if (!result) {

@@ -1,16 +1,16 @@
 /**
- * Cloudflare Pages Function - SenseNova DeepSeek V4 Flash 文本对话接口
+ * Cloudflare Pages Function - 智谱大模型（Zhipu / BigModel）文本对话接口
  * 路由: POST /api/chat
  * 平台: Cloudflare Pages
  *
  * 功能:
- * - 流式输出（SSE），打字机体验
- * - 支持普通模式 / 专家模式（深度思考）
- * - IP 级别速率限制（复用 [[path]].ts 的 KV/内存降级逻辑）
+ * - 流式输出（SSE），打字机体验（OpenAI 兼容格式，前端无需改动）
+ * - 支持普通模式 / 专家模式（使用更强模型）
+ * - IP 级别速率限制
  * - 复用安全响应头
  */
 
-const SENSENOVA_BASE = 'https://token.sensenova.cn/v1';
+const ZHIPU_BASE = 'https://open.bigmodel.cn/api/paas/v4';
 
 // ================== 速率限制（复用内存 Map，无需 KV）===================
 const inMemoryStore = new Map<string, { count: number; resetAt: number }>();
@@ -59,9 +59,9 @@ function jsonResponse(data: unknown, status: number, extraHeaders: Record<string
 
 // ================== Env ==================
 interface Env {
-  SENSENOVA_API_KEY?: string;
-  SENSENOVA_MODEL?: string;             // 默认 deepseek-v4-flash
-  SENSENOVA_THINKING_API_KEY?: string;   // 专家模式用 deepseek-v4-pro
+  ZHIPU_API_KEY?: string;
+  ZHIPU_MODEL?: string;          // 普通模式默认模型（如 glm-4-flash）
+  ZHIPU_EXPERT_MODEL?: string;   // 专家模式使用的更强模型（可选，缺省回退到默认模型）
 }
 
 // ================== 主处理 ==================
@@ -79,7 +79,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   }
 
   // API Key 检查
-  if (!env.SENSENOVA_API_KEY) {
+  if (!env.ZHIPU_API_KEY) {
     return jsonResponse({ error: 'SERVICE_ERROR' }, 503, rlHeaders);
   }
 
@@ -113,12 +113,10 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 选择模型
     const model = isExpertMode
-      ? (env.SENSENOVA_THINKING_API_KEY ? (env.SENSENOVA_MODEL?.replace('flash', 'pro') || 'deepseek-v4-pro') : 'deepseek-v4-flash')
-      : (env.SENSENOVA_API_KEY ? (env.SENSENOVA_MODEL || 'deepseek-v4-flash') : 'deepseek-v4-flash');
+      ? (env.ZHIPU_EXPERT_MODEL || env.ZHIPU_MODEL || 'glm-4-flash')
+      : (env.ZHIPU_MODEL || 'glm-4-flash');
 
-    const apiKey = isExpertMode
-      ? (env.SENSENOVA_THINKING_API_KEY || env.SENSENOVA_API_KEY)
-      : env.SENSENOVA_API_KEY;
+    const apiKey = env.ZHIPU_API_KEY;
 
     const requestBody: Record<string, unknown> = {
       model,
@@ -128,14 +126,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       temperature: isExpertMode ? 0.7 : 0.9,
     };
 
-    // 专家模式：开启深度思考
-    if (isExpertMode) {
-      requestBody.reasoning_level = 'high';
-    }
-
     // 非流式：直接返回
     if (!stream) {
-      const apiRes = await fetch(`${SENSENOVA_BASE}/chat/completions`, {
+      const apiRes = await fetch(`${ZHIPU_BASE}/chat/completions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -145,7 +138,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       });
 
       if (!apiRes.ok) {
-        console.error('SenseNova API error:', apiRes.status);
+        console.error('Zhipu API error:', apiRes.status);
         return jsonResponse({ error: 'SERVICE_ERROR' }, 502);
       }
 
@@ -155,7 +148,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     // 流式：代理 SSE
-    const apiRes = await fetch(`${SENSENOVA_BASE}/chat/completions`, {
+    const apiRes = await fetch(`${ZHIPU_BASE}/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -165,7 +158,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
 
     if (!apiRes.ok) {
-      console.error('SenseNova API error:', apiRes.status);
+      console.error('Zhipu API error:', apiRes.status);
       return jsonResponse({ error: 'SERVICE_ERROR' }, 502);
     }
 
