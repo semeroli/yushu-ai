@@ -8,9 +8,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 interface NavbarProps {
   onAuthClick: () => void;
+  onHome: () => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
+export const Navbar: React.FC<NavbarProps> = ({ onAuthClick, onHome }) => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -36,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
     { label: '功能特性', href: '#features' },
     { label: '助手体验', href: '#experience' },
     { label: '方案定价', href: '#pricing' },
+    { label: '博客', href: '#blog' },
   ];
 
   const handleLogout = async () => {
@@ -51,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onAuthClick }) => {
         : "bg-transparent"
     )}>
       <div className="max-w-7xl mx-auto flex items-center justify-between">
-        <div className="flex items-center gap-2 group cursor-pointer" onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}>
+        <div className="flex items-center gap-2 group cursor-pointer" onClick={onHome}>
           <div className="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center group-hover:rotate-12 transition-transform">
             <Library className="w-5 h-5 text-white" />
           </div>

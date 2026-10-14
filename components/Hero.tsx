@@ -4,9 +4,10 @@ import { MotionDiv } from '../lib/motion';
 
 interface HeroProps {
   onStartClick: () => void;
+  onLearnMore: () => void;
 }
 
-export const Hero: React.FC<HeroProps> = ({ onStartClick }) => {
+export const Hero: React.FC<HeroProps> = ({ onStartClick, onLearnMore }) => {
   return (
     <section className="relative pt-32 pb-20 px-6 overflow-hidden">
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] bg-emerald-600/10 blur-[120px] rounded-full -z-10" />
@@ -26,7 +27,10 @@ export const Hero: React.FC<HeroProps> = ({ onStartClick }) => {
             >
               立即开始使用 <ArrowRight className="w-5 h-5" />
             </button>
-            <button className="w-full sm:w-auto px-8 py-4 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-link dark:text-white font-bold rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-all">
+            <button
+              onClick={onLearnMore}
+              className="w-full sm:w-auto px-8 py-4 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-link dark:text-white font-bold rounded-2xl hover:bg-black/10 dark:hover:bg-white/10 transition-all"
+            >
               了解更多功能
             </button>
           </div>

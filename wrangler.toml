@@ -13,3 +13,13 @@ database_id = "6155c91e-22b0-4a06-8b68-f5d12acac0fa"
 # 否则运行时报 "To use the new ReadableStream() constructor, enable the
 # streams_enable_constructors compatibility flag"。
 compatibility_flags = ["streams_enable_constructors"]
+
+# ================= 博客图片存储（R2，可选但推荐）=================
+# 博客后台「上传图片」功能依赖此绑定。配置步骤：
+#   1) Cloudflare 控制台 → R2 → 创建存储桶，名称例如 yushu-blog
+#   2) 取消下面三行注释（bucket_name 改成你的桶名）
+#   3) 重新部署（本文件改完必须重新部署才生效）
+# 未配置时，博客文字与「插入图片链接」功能照常可用，仅「上传图片」不可用。
+# [[r2_buckets]]
+# binding = "BUCKET"
+# bucket_name = "yushu-blog"
