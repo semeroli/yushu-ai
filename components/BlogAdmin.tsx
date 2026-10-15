@@ -228,8 +228,10 @@ export const BlogAdmin: React.FC = () => {
   };
 
   const uploadImage = async (file: File, asCover: boolean) => {
+    // 文件名改成纯 ASCII：边缘环境的表单解析器可能因中文/特殊字符文件名解析失败
+    const ext = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'png';
     const fd = new FormData();
-    fd.append('file', file);
+    fd.append('file', file, `upload-${Date.now().toString(36)}.${ext}`);
     const setLoading = asCover ? setCoverUploading : setImgUploading;
     setLoading(true);
     setMsg('');

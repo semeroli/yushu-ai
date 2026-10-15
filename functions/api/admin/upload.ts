@@ -30,13 +30,44 @@ export const onRequestPost: PagesFunction<UploadEnv> = async ({ request, env }) 
     );
   }
 
-  const form = await request.formData().catch(() => null);
-  const file = form?.get('file');
-  // 运行时鸭子类型判断（兼容各环境的 File/Blob 实现）
-  if (!file || typeof (file as any).arrayBuffer !== 'function') {
-    return json({ error: 'NO_FILE' }, 400);
+  // 解析 multipart 表单。边缘环境的解析器对「文件名含中文/特殊字符」比较挑剔，
+  // 可能直接抛错 → 捕获后带回诊断信息；字段名拿不到文件时再全表单扫一遍。
+  let form: FormData | null = null;
+  let formErr = '';
+  try {
+    form = await request.formData();
+  } catch (e: any) {
+    formErr = String(e?.message || e);
   }
-  const f = file as any;
+
+  let f: any = null;
+  if (form) {
+    const cand: any = form.get('file');
+    if (cand && typeof cand.arrayBuffer === 'function') {
+      f = cand;
+    } else {
+      for (const v of form.values()) {
+        const anyV = v as any;
+        if (anyV && typeof anyV.arrayBuffer === 'function') {
+          f = anyV;
+          break;
+        }
+      }
+    }
+  }
+
+  if (!f) {
+    return json(
+      {
+        error: form ? 'NO_FILE' : 'FORM_PARSE_ERROR',
+        message: form
+          ? '请求里没有找到文件字段。' + (formErr ? `（解析提示：${formErr}）` : '')
+          : '表单解析失败：' + (formErr || '未知原因'),
+        keys: form ? Array.from(form.keys()) : [],
+      },
+      400
+    );
+  }
   const type: string = f.type || '';
   const size: number = f.size || 0;
 
