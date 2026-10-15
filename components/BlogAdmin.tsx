@@ -155,6 +155,25 @@ export const BlogAdmin: React.FC = () => {
                         </a>
                       )}
                       <button
+                        onClick={async () => {
+                          setBusy(true);
+                          try {
+                            await fetch('/api/admin/posts', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ id: p.id, status: p.status === 'published' ? 'draft' : 'published' }),
+                            });
+                          } finally {
+                            setBusy(false);
+                          }
+                          load();
+                        }}
+                        className="p-2 text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition-colors"
+                        title={p.status === 'published' ? '下架（改回草稿）' : '发布'}
+                      >
+                        {p.status === 'published' ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                      <button
                         onClick={() =>
                           setEditing({
                             id: p.id, slug: p.slug, title: p.title,
