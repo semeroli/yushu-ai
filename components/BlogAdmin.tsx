@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Plus, Pencil, Trash2, Save, Eye, EyeOff, ArrowLeft, Loader2, FileText,
-  Bold, Italic, Underline, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus, Download,
+  Bold, Italic, Underline, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus, Download, Folder,
   CheckCircle2, X, ExternalLink,
 } from 'lucide-react';
 
@@ -34,6 +34,14 @@ const EMPTY: FormState = {
   id: null, slug: '', title: '', excerpt: '', cover_image: '', content_html: '', status: 'draft',
 };
 
+export interface BlogImageInfo {
+  key: string;
+  size: number;
+  last_modified: string;
+  ref_count: number;
+  refs: string[];
+}
+
 export const BlogAdmin: React.FC = () => {
   const { user } = useAuth();
   const [posts, setPosts] = useState<PostRow[]>([]);
@@ -42,6 +50,9 @@ export const BlogAdmin: React.FC = () => {
   const [msg, setMsg] = useState('');
   const [coverUploading, setCoverUploading] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
+  const [showImages, setShowImages] = useState(false);
+  const [images, setImages] = useState<BlogImageInfo[] | null>(null);
+  const [imagesBusy, setImagesBusy] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const [editingView, setEditingView] = useState<'edit' | 'split' | 'preview'>('split');
   const [previewHtml, setPreviewHtml] = useState('');
@@ -99,6 +110,25 @@ export const BlogAdmin: React.FC = () => {
               className="ml-auto px-3 py-1.5 text-sm rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 transition-colors"
             >
               刷新
+            </button>
+            <button
+              onClick={async () => {
+                setShowImages(true);
+                setImagesBusy(true);
+                try {
+                  const r = await fetch('/api/admin/blog-images');
+                  const d = await r.json().catch(() => ({}));
+                  if (r.ok && d.items) setImages(d.items as BlogImageInfo[]);
+                  else setMsg('图片总览加载失败：' + (d.message || d.error || r.status));
+                } catch {
+                  setMsg('图片总览网络错误');
+                } finally {
+                  setImagesBusy(false);
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 transition-colors"
+            >
+              <Folder className="w-4 h-4" /> 图片总览
             </button>
             <button
               onClick={() => setEditing({ ...EMPTY })}
@@ -212,6 +242,119 @@ export const BlogAdmin: React.FC = () => {
               </tbody>
             </table>
           </div>
+
+          {/* R2 图片总览面板（可选折叠） */}
+          {showImages && (
+            <div className="mt-8 rounded-2xl border border-black/10 dark:border-white/10 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Folder className="w-4 h-4 text-emerald-500" />
+                <h3 className="text-lg font-semibold">R2 图片总览</h3>
+                <span className="text-xs text-link/40 dark:text-white/40">
+                  桶里所有对象 + 是否被文章引用（「未引用」即编辑器里已删但桶里仍残留的孤儿文件）
+                </span>
+                <button
+                  onClick={() => {
+                    setImagesBusy(true);
+                    fetch('/api/admin/blog-images')
+                      .then((r) => r.json())
+                      .then((d) => {
+                        if (d.items) setImages(d.items as BlogImageInfo[]);
+                      })
+                      .finally(() => setImagesBusy(false));
+                  }}
+                  className="ml-auto px-3 py-1.5 text-xs rounded-lg bg-black/5 dark:bg-white/10 hover:bg-black/10 transition-colors"
+                >
+                  刷新
+                </button>
+                <button
+                  onClick={async () => {
+                    const orphans = (images || []).filter((i) => i.ref_count === 0);
+                    if (!orphans.length) {
+                      setMsg('没有未引用的图片可清理');
+                      return;
+                    }
+                    if (!confirm('清理 ' + orphans.length + ' 个未引用图片？（已引用的对象不会动）')) return;
+                    setImagesBusy(true);
+                    try {
+                      const keys = orphans.map((i) => i.key).join(',');
+                      const r = await fetch('/api/admin/blog-images?keys=' + encodeURIComponent(keys), {
+                        method: 'DELETE',
+                      });
+                      const d = await r.json().catch(() => ({}));
+                      if (r.ok) {
+                        setMsg(
+                          '已清理 ' + d.deleted + ' 个未引用图片' +
+                          (d.skipped?.length ? '（' + d.skipped.length + ' 个被文章引用，跳过）' : '')
+                        );
+                        const rr = await fetch('/api/admin/blog-images');
+                        const dd = await rr.json();
+                        if (dd.items) setImages(dd.items as BlogImageInfo[]);
+                      } else {
+                        setMsg('清理失败：' + (d.message || d.error || r.status));
+                      }
+                    } finally {
+                      setImagesBusy(false);
+                    }
+                  }}
+                  className="px-3 py-1.5 text-xs rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                  disabled={imagesBusy}
+                >
+                  <Trash2 className="w-3.5 h-3.5 inline mr-1" />
+                  清理未引用
+                </button>
+              </div>
+
+              {imagesBusy && <p className="text-xs text-link/40 dark:text-white/40 py-4 text-center">加载中…</p>}
+
+              {!imagesBusy && images && (
+                <>
+                  <p className="text-xs text-link/50 dark:text-white/50 mb-2">
+                    共 {images.length} 个对象 · 未引用 {images.filter((i) => i.ref_count === 0).length} 个 ·
+                    已引用 {images.filter((i) => i.ref_count > 0).length} 个
+                  </p>
+                  <div className="overflow-x-auto rounded-xl border border-black/10 dark:border-white/10">
+                    <table className="w-full text-sm">
+                      <thead className="bg-black/5 dark:bg-white/5 text-link/60 dark:text-white/60">
+                        <tr>
+                          <th className="text-left p-2.5 font-medium">对象键名</th>
+                          <th className="text-left p-2.5 font-medium">大小</th>
+                          <th className="text-left p-2.5 font-medium">最后修改</th>
+                          <th className="text-left p-2.5 font-medium">引用</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {images.map((i) => (
+                          <tr key={i.key} className="border-t border-black/5 dark:border-white/5">
+                            <td className="p-2.5 font-mono text-xs break-all max-w-[360px]">{i.key}</td>
+                            <td className="p-2.5 text-xs whitespace-nowrap">{(i.size / 1024).toFixed(1)} KB</td>
+                            <td className="p-2.5 text-xs text-link/50 dark:text-white/50 whitespace-nowrap">
+                              {new Date(i.last_modified).toLocaleString('zh-CN')}
+                            </td>
+                            <td className="p-2.5">
+                              {i.ref_count > 0 ? (
+                                <span className="inline-flex items-center gap-1 text-emerald-600 text-xs">
+                                  <CheckCircle2 className="w-3.5 h-3.5" /> {i.ref_count} 处引用
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-link/40 dark:text-white/40 text-xs">
+                                  <X className="w-3.5 h-3.5" /> 未引用
+                                </span>
+                              )}
+                              {i.refs.length > 0 && (
+                                <div className="text-[11px] text-link/40 dark:text-white/40 mt-1">
+                                  {i.refs.join(', ')}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </section>
     );
