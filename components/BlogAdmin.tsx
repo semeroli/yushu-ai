@@ -63,6 +63,23 @@ export const BlogAdmin: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  // 把正文灌进编辑器。必须放在所有「提前 return」之前（React Hooks 规则：
+  // 每次渲染 Hook 数量要一致，否则切换视图时整页崩溃白屏）。
+  // 用 ref 记录"已为哪篇文章灌过内容"，只在切换编辑目标时灌一次，
+  // 避免打字过程中被重置。
+  const editorInitRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!editing) {
+      editorInitRef.current = null;
+      return;
+    }
+    const key = editing.id ?? '__new__';
+    if (editorInitRef.current !== key && editorRef.current) {
+      editorRef.current.innerHTML = editing.content_html || '';
+      editorInitRef.current = key;
+    }
+  });
+
   if (!user || user.role !== 'admin') return null;
 
   // ============ 列表视图 ============
@@ -180,11 +197,6 @@ export const BlogAdmin: React.FC = () => {
 
   // ============ 编辑视图 ============
   const f = editing;
-  // 进入编辑时把已有正文灌进编辑器
-  useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = f.content_html || '';
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [f.id]);
 
   const setField = (k: keyof FormState, v: any) => setEditing({ ...f, [k]: v });
 
