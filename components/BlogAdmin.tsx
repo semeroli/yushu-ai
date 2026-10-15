@@ -227,16 +227,25 @@ export const BlogAdmin: React.FC = () => {
     document.execCommand(cmd, false, val);
   };
 
-  const uploadImage = async (file: File, asCover: boolean) => {
-    // 文件名改成纯 ASCII：边缘环境的表单解析器可能因中文/特殊字符文件名解析失败
-    const ext = (file.name.split('.').pop() || 'png').replace(/[^a-zA-Z0-9]/g, '').slice(0, 8) || 'png';
-    const fd = new FormData();
-    fd.append('file', file, `upload-${Date.now().toString(36)}.${ext}`);
-    const setLoading = asCover ? setCoverUploading : setImgUploading;
+  // 把文件读成 dataURL，再走 JSON 通道发给后端。
+  // 这样做彻底绕开了边缘环境对 multipart 表单解析不稳定的问题（之前反复报 NO_FILE）。
+  const fileToDataUrl = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('read-failed'));
+      reader.readAsDataURL(file);
+    });
+
+  const uploadToR2 = async (payload: { data?: string; url?: string }, setLoading: (b: boolean) => void) => {
     setLoading(true);
     setMsg('');
     try {
-      const r = await fetch('/api/admin/upload', { method: 'POST', body: fd });
+      const r = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
       const d = await r.json().catch(() => ({}));
       if (!r.ok) {
         setMsg(d.message || d.error || '上传失败');
@@ -248,6 +257,18 @@ export const BlogAdmin: React.FC = () => {
       return null;
     } finally {
       setLoading(false);
+    }
+  };
+
+  const uploadImage = async (file: File, asCover: boolean) => {
+    const setLoading = asCover ? setCoverUploading : setImgUploading;
+    try {
+      const dataUrl = await fileToDataUrl(file);
+      return await uploadToR2({ data: dataUrl }, setLoading);
+    } catch {
+      setLoading(false);
+      setMsg('读取文件失败');
+      return null;
     }
   };
 
@@ -270,11 +291,29 @@ export const BlogAdmin: React.FC = () => {
     if (url) setField('cover_image', url);
   };
 
-  const insertImageByUrl = () => {
+  const insertImageByUrl = async () => {
     const url = window.prompt('请输入图片网址（http(s)://...）');
     if (!url) return;
-    editorRef.current?.focus();
-    document.execCommand('insertImage', false, url);
+    // 先尝试把外链转存到本站 R2：这样即便图床失效 / 有防盗链，读者也能正常看到图片。
+    // 转存失败时退化为直接插入外链（至少还能显示就显示）。
+    setImgUploading(true);
+    try {
+      const r = await fetch('/api/admin/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const d = await r.json().catch(() => ({}));
+      const finalUrl = r.ok && d.url ? d.url : url;
+      editorRef.current?.focus();
+      document.execCommand('insertImage', false, finalUrl);
+      setMsg(r.ok && d.url ? '外链图片已转存到站内 ✓' : '外链图片直接引用（转存失败，已按原样插入）');
+    } catch {
+      editorRef.current?.focus();
+      document.execCommand('insertImage', false, url);
+    } finally {
+      setImgUploading(false);
+    }
   };
 
   const insertLink = () => {
