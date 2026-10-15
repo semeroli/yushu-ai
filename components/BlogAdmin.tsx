@@ -43,6 +43,8 @@ export const BlogAdmin: React.FC = () => {
   const [coverUploading, setCoverUploading] = useState(false);
   const [imgUploading, setImgUploading] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
+  const [editingView, setEditingView] = useState<'edit' | 'split' | 'preview'>('split');
+  const [previewHtml, setPreviewHtml] = useState('');
 
   const load = async () => {
     setBusy(true);
@@ -77,6 +79,7 @@ export const BlogAdmin: React.FC = () => {
     if (editorInitRef.current !== key && editorRef.current) {
       editorRef.current.innerHTML = editing.content_html || '';
       editorInitRef.current = key;
+      setPreviewHtml(editing.content_html || '');
     }
   });
 
@@ -395,8 +398,27 @@ export const BlogAdmin: React.FC = () => {
             />
           </div>
 
-          {/* 工具栏 */}
-          <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] sticky top-16 z-20">
+          {/* 视图切换：编辑 / 分屏 / 预览 */}
+          <div className="flex items-center gap-1 mb-2">
+            {(['edit', 'split', 'preview'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setEditingView(v)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  editingView === v
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-black/5 dark:bg-white/10 text-link/60 dark:text-white/60 hover:bg-black/10 dark:hover:bg-white/20'
+                }`}
+              >
+                {v === 'edit' ? '编辑' : v === 'split' ? '分屏预览' : '预览'}
+              </button>
+            ))}
+            <span className="ml-2 text-xs text-link/40 dark:text-white/40">右侧/预览区随输入实时更新</span>
+          </div>
+
+          {/* 工具栏（始终在顶部，横跨） */}
+          <div className="flex flex-wrap items-center gap-1 p-1.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/[0.02] dark:bg-white/[0.02] sticky top-16 z-20 mb-3">
             <ToolBtn onClick={() => exec('bold')} title="加粗"><Bold className="w-4 h-4" /></ToolBtn>
             <ToolBtn onClick={() => exec('italic')} title="斜体"><Italic className="w-4 h-4" /></ToolBtn>
             <ToolBtn onClick={() => exec('underline')} title="下划线"><Underline className="w-4 h-4" /></ToolBtn>
@@ -414,19 +436,44 @@ export const BlogAdmin: React.FC = () => {
             </label>
           </div>
 
-          {/* 正文编辑区 */}
-          <div
-            ref={editorRef}
-            contentEditable
-            suppressContentEditableWarning
-            className="min-h-[360px] rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.03] p-5 outline-none focus:border-emerald-500 leading-relaxed
-              [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1
-              [&_p]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-3"
-            data-placeholder="在此撰写正文，可插入图片、标题、列表…"
-          />
+          {/* 编辑区 + 实时预览 */}
+          <div className={editingView === 'split' ? 'grid md:grid-cols-2 gap-4 items-start' : ''}>
+            {/* 正文编辑区（始终挂载，预览模式下仅隐藏，避免内容丢失） */}
+            <div
+              ref={editorRef}
+              contentEditable
+              suppressContentEditableWarning
+              onInput={(e) => setPreviewHtml(e.currentTarget.innerHTML)}
+              className={
+                'min-h-[360px] rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.03] p-5 outline-none focus:border-emerald-500 leading-relaxed ' +
+                (editingView === 'preview' ? 'hidden ' : '') +
+                '[&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-4 [&_h2]:mb-2 [&_h3]:text-xl [&_h3]:font-bold [&_h3]:mt-3 [&_h3]:mb-1 ' +
+                '[&_p]:my-3 [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_img]:max-w-full [&_img]:rounded-lg [&_img]:my-3'
+              }
+              data-placeholder="在此撰写正文，可插入图片、标题、列表…"
+            />
 
-          <p className="text-xs text-link/40 dark:text-white/40">
-            提示：图片支持「上传」（需先配置 R2 存储桶）和「插入图片链接」两种方式。排版工具使用浏览器原生功能。
+            {editingView !== 'edit' && (
+              <div
+                className="min-h-[360px] rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.03] p-5 overflow-auto
+                  [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mt-8 [&_h1]:mb-4 [&_h1]:serif-zh
+                  [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:serif-zh
+                  [&_h3]:text-xl [&_h3]:font-bold [&_h3]:mt-6 [&_h3]:mb-2
+                  [&_p]:my-4 [&_p]:text-[1.05rem]
+                  [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-4
+                  [&_li]:my-1.5
+                  [&_a]:text-emerald-600 [&_a]:underline
+                  [&_img]:rounded-xl [&_img]:my-6 [&_img]:max-w-full [&_img]:mx-auto [&_img]:border [&_img]:border-black/10 [&_img]:dark:border-white/10
+                  [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-link/70 [&_blockquote]:dark:text-white/70 [&_blockquote]:my-4
+                  [&_code]:bg-black/5 [&_code]:dark:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
+                  [&_pre]:bg-black/5 [&_pre]:dark:bg-white/5 [&_pre]:p-4 [&_pre]:rounded-xl [&_pre]:overflow-x-auto [&_pre]:my-4"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            )}
+          </div>
+
+          <p className="text-xs text-link/40 dark:text-white/40 mt-2">
+            提示：图片支持「上传」（需先配置 R2 存储桶）和「插入图片链接」两种方式。排版工具使用浏览器原生功能。预览区实时呈现读者看到的效果。
           </p>
         </div>
       </div>
