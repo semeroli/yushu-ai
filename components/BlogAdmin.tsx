@@ -437,6 +437,23 @@ export const BlogAdmin: React.FC = () => {
                   placeholder="封面图片网址（可上传）"
                   className="flex-1 bg-transparent border border-black/10 dark:border-white/10 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-emerald-500"
                 />
+                {/^https?:\/\//.test(f.cover_image) && !f.cover_image.includes('/api/blog-media/') && (
+                  <button
+                    type="button"
+                    disabled={coverUploading}
+                    onClick={async () => {
+                      const url = await uploadToR2({ url: f.cover_image }, setCoverUploading);
+                      if (url) {
+                        setField('cover_image', url);
+                        setMsg('封面外链已转存到站内 ✓');
+                      }
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 text-sm hover:bg-emerald-600/20 transition-colors disabled:opacity-50"
+                    title="把外链图片拉回本站存储，彻底解决图床失效/防盗链导致的裂图"
+                  >
+                    {coverUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : '转存'}
+                  </button>
+                )}
                 <label className="relative cursor-pointer px-3 py-1.5 rounded-lg bg-black/5 dark:bg-white/10 text-sm hover:bg-black/10 transition-colors">
                   {coverUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : '上传'}
                   <input type="file" accept="image/*" className="hidden" onChange={onPickCoverImage} />
