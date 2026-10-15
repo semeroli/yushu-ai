@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   Plus, Pencil, Trash2, Save, Eye, EyeOff, ArrowLeft, Loader2, FileText,
-  Bold, Italic, Underline, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus,
+  Bold, Italic, Underline, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus, Download,
   CheckCircle2, X, ExternalLink,
 } from 'lucide-react';
 
@@ -322,6 +322,47 @@ export const BlogAdmin: React.FC = () => {
     exec('createLink', url);
   };
 
+  // 把正文里所有外链图片（http(s) 开头且非本站 /api/blog-media/）批量转存到 R2
+  const rehostContentImages = async () => {
+    const html = editorRef.current?.innerHTML || '';
+    const imgs = html.match(/<img[^>]+src=(?:"[^"]+"|'[^']+')/gi) || [];
+    const external = imgs.filter((tag) => {
+      const m = tag.match(/src=(?:"([^"]+)"|'([^']+)')/i);
+      const src = m?.[1] ?? m?.[2] ?? '';
+      return /^https?:\/\//.test(src) && !src.startsWith('/api/blog-media/') && !src.includes(window.location.origin);
+    });
+    if (external.length === 0) {
+      setMsg('正文里没有需要转存的外链图片');
+      return;
+    }
+    if (!confirm('把正文里 ' + external.length + ' 张外链图片拉回本站存储？（完成后记得点「保存」写回文章）')) return;
+    setMsg('正在转存 ' + external.length + ' 张外链图片…');
+    try {
+      const r = await fetch('/api/admin/rehost', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ html }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        setMsg('转存失败：' + (d.message || d.error || r.status));
+        return;
+      }
+      // 把转存后的 HTML 写回编辑器与预览（innerHTML 整体替换，光标位置会丢，可接受）
+      if (editorRef.current) {
+        editorRef.current.innerHTML = d.html;
+        setPreviewHtml(d.html);
+      }
+      setMsg(
+        '已转存 ' + d.ok + '/' + d.total + ' 张外链图片' +
+        (d.failed?.length ? '（' + d.failed.length + ' 张拉取失败，已保留原链接）' : '') +
+        ' — 请点「保存」写回文章'
+      );
+    } catch {
+      setMsg('转存网络错误');
+    }
+  };
+
   const save = async () => {
     if (!f.title.trim()) {
       setMsg('请填写标题');
@@ -511,6 +552,10 @@ export const BlogAdmin: React.FC = () => {
               {imgUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
               <input type="file" accept="image/*" className="hidden" onChange={onPickContentImage} />
             </label>
+            <span className="w-px h-5 bg-black/10 dark:bg-white/10 mx-1" />
+            <ToolBtn onClick={rehostContentImages} title="把正文里所有外链图片批量转存到本站">
+              <Download className="w-4 h-4" />
+            </ToolBtn>
           </div>
 
           {/* 编辑区 + 实时预览 */}

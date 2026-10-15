@@ -13,6 +13,10 @@
  * 图床（如 imagebed.cc）常因失效或防盗链导致外链图片在读者浏览器里显示不出来。
  * 由服务端把图片拉回来存进 R2，文章里只引用本站 /api/blog-media/... 地址，
  * 彻底摆脱对第三方图床的依赖。
+ *
+ * key 约定（务必与 /api/blog-media/[[key]].ts 保持一致）：
+ * 只允许单层 key（不含 '/'）！多级路径 key（blog/2026/xxx.jpg）会被
+ * Pages 的 [[key]] 路由 404。时间戳与随机后缀保证唯一性。
  */
 import type { PagesFunction } from '@cloudflare/workers-types';
 import type { R2Bucket } from '@cloudflare/workers-types';
@@ -25,18 +29,24 @@ interface UploadEnv extends AuthEnv {
 const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const ALLOWED = ['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/avif'];
 
-function genKey(type: string): string {
+/**
+ * 生成 R2 对象键名。
+ * 🔴 必须是单层字符串（不带 '/'）：Pages 的 [[key]] 通配路由无法稳定匹配多级路径。
+ * 用「时间戳(36) + 随机后缀 + 扩展名」保证唯一，语义前缀 blog 用于人类可读。
+ */
+export function genKey(type: string): string {
   const ext = type.split('/')[1].replace('jpeg', 'jpg').replace('+xml', '');
-  return `blog/${new Date().getFullYear()}/${Date.now().toString(36)}-${Math.random()
-    .toString(36)
-    .slice(2, 8)}.${ext}`;
+  const ts = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `blog-${ts}-${rand}.${ext}`;
 }
 
 /**
  * 通道二：服务端拉取外部图片并存入 R2。
  * 必须管理员鉴权、且 R2 已配置（调用方已前置检查）。
+ * 返回 { url, key } 或 4xx 错误 Response。
  */
-async function fetchAndStore(url: string, env: UploadEnv) {
+async function fetchAndStore(url: string, env: UploadEnv): Promise<Response> {
   let u: URL;
   try {
     u = new URL(url);
