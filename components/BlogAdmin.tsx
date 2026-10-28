@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { marked } from 'marked';
 import { useAuth } from '../contexts/AuthContext';
+import { MarkdownModal } from './MarkdownModal';
 import {
   Plus, Pencil, Trash2, Save, Eye, EyeOff, ArrowLeft, Loader2, FileText,
   Bold, Italic, Underline, Heading2, Heading3, List, ListOrdered, Link2, ImagePlus, Download, Folder,
-  CheckCircle2, X, ExternalLink,
+  CheckCircle2, X, ExternalLink, FileCode,
 } from 'lucide-react';
 
 interface PostRow {
@@ -53,6 +55,7 @@ export const BlogAdmin: React.FC = () => {
   const [showImages, setShowImages] = useState(false);
   const [images, setImages] = useState<BlogImageInfo[] | null>(null);
   const [imagesBusy, setImagesBusy] = useState(false);
+  const [mdModalOpen, setMdModalOpen] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
   const [editingView, setEditingView] = useState<'edit' | 'split' | 'preview'>('split');
   const [previewHtml, setPreviewHtml] = useState('');
@@ -699,6 +702,10 @@ export const BlogAdmin: React.FC = () => {
             <ToolBtn onClick={rehostContentImages} title="把正文里所有外链图片批量转存到本站">
               <Download className="w-4 h-4" />
             </ToolBtn>
+            <span className="w-px h-5 bg-black/10 dark:bg-white/10 mx-1" />
+            <ToolBtn onClick={() => setMdModalOpen(true)} title="粘贴整篇 Markdown 文档（左侧 MD 源码 + 右侧实时渲染）">
+              <FileCode className="w-4 h-4" />
+            </ToolBtn>
           </div>
 
           {/* 编辑区 + 实时预览 */}
@@ -709,6 +716,27 @@ export const BlogAdmin: React.FC = () => {
               contentEditable
               suppressContentEditableWarning
               onInput={(e) => setPreviewHtml(e.currentTarget.innerHTML)}
+              onPaste={(e) => {
+                const text = e.clipboardData.getData('text/plain');
+                // 识别粘贴内容是 Markdown 源码（含 # 标题、** 加粗、``` 代码块、| 表格等特征）
+                if (text && /(^|\n)(#{1,6}\s|```|> \S|\s\|\s|- \S)/.test(text) && !e.clipboardData.items.length) {
+                  e.preventDefault();
+                  const html = marked.parse(text, { async: false, gfm: true, breaks: true }) as string;
+                  const frag = document.createRange().createContextualFragment(html);
+                  const sel = window.getSelection();
+                  const ed = e.currentTarget as HTMLElement;
+                  const anchor = sel?.anchorNode;
+                  if (anchor && ed.contains(anchor)) {
+                    const range = document.createRange();
+                    range.setStart(anchor, 0);
+                    range.insertNode(frag);
+                  } else {
+                    ed.appendChild(frag);
+                  }
+                  setPreviewHtml(ed.innerHTML);
+                  setMsg('Markdown 已自动渲染为 HTML ✓');
+                }
+              }}
               className={
                 'min-h-[360px] rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/[0.03] p-5 outline-none focus:border-emerald-500 leading-relaxed ' +
                 (editingView === 'preview' ? 'hidden ' : '') +
@@ -742,6 +770,25 @@ export const BlogAdmin: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Markdown 粘贴模态（整篇 MD → 渲染 HTML → 插入正文） */}
+      <MarkdownModal
+        open={mdModalOpen}
+        onInsert={(html) => {
+          const ed = editorRef.current;
+          if (!ed) return;
+          ed.focus();
+          // 把渲染后的 HTML 插到编辑器末尾
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          const frag = document.createRange().createContextualFragment(tmp.innerHTML || '');
+          ed.appendChild(frag);
+          setPreviewHtml(ed.innerHTML);
+          setMdModalOpen(false);
+          setMsg('Markdown 已渲染并插入正文 ✓');
+        }}
+        onClose={() => setMdModalOpen(false)}
+      />
     </section>
   );
 };
