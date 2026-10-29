@@ -115,22 +115,7 @@ export const MarkdownModal: React.FC<Props> = ({ open, initialHtml, onInsert, on
               <CheckCircle2 className="w-3.5 h-3.5" /> 渲染预览
             </div>
             <div
-              className="flex-1 overflow-auto p-5 leading-relaxed text-link dark:text-white/90
-                [&_h1]:text-2xl [&_h1]:font-bold [&_h1]:mt-6 [&_h1]:mb-3 [&_h1]:serif-zh
-                [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-5 [&_h2]:mb-2.5 [&_h2]:serif-zh
-                [&_h3]:text-lg [&_h3]:font-bold [&_h3]:mt-4 [&_h3]:mb-2
-                [&_p]:my-3 [&_p]:text-[0.95rem]
-                [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-3 [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-3
-                [&_li]:my-1
-                [&_a]:text-emerald-600 [&_a]:underline
-                [&_img]:rounded-lg [&_img]:my-4 [&_img]:max-w-full [&_img]:border [&_img]:border-black/10 [&_img]:dark:border-white/10
-                [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-link/70 [&_blockquote]:dark:text-white/70 [&_blockquote]:my-3
-                [&_code]:bg-black/5 [&_code]:dark:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-[0.85em]
-                [&_pre]:bg-black/5 [&_pre]:dark:bg-white/5 [&_pre]:p-3 [&_pre]:rounded-lg [&_pre]:overflow-x-auto [&_pre]:my-3
-                [&_table]:w-full [&_table]:text-sm [&_table]:my-3 [&_table]:border [&_table]:border-black/10 [&_table]:dark:border-white/10
-                [&_th]:bg-black/5 [&_th]:dark:bg-white/10 [&_th]:px-2.5 [&_th]:py-1.5 [&_th]:text-left [&_th]:border-b [&_th]:border-black/10 [&_th]:dark:border-white/10
-                [&_td]:px-2.5 [&_td]:py-1.5 [&_td]:border-b [&_td]:border-black/5 [&_td]:dark:border-white/5
-                [&_hr]:my-5 [&_hr]:border-black/10 [&_hr]:dark:border-white/10"
+              className="article-content flex-1 overflow-auto p-5"
               dangerouslySetInnerHTML={{ __html: previewHtml || '<p class="text-link/30 dark:text-white/30">粘贴 Markdown 后会实时渲染在这里…</p>' }}
             />
           </div>

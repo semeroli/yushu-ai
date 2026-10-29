@@ -46,6 +46,190 @@
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 3px; }
     .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); }
+
+    /* ============ 博客正文排版（Markdown 渲染后）============ */
+    .article-content {
+      font-size: 1.05rem;
+      line-height: 1.85;
+      color: var(--text-main, #1c1917);
+    }
+    .dark .article-content { color: rgba(255,255,255,0.9); }
+
+    .article-content h1, .article-content h2, .article-content h3,
+    .article-content h4, .article-content h5, .article-content h6 {
+      font-family: 'Noto Serif SC', serif;
+      font-weight: 700;
+      line-height: 1.3;
+      margin-top: 1.8em;
+      margin-bottom: 0.6em;
+      color: var(--text-main, #1c1917);
+    }
+    .dark .article-content h1, .dark .article-content h2,
+    .dark .article-content h3, .dark .article-content h4,
+    .dark .article-content h5, .dark .article-content h6 {
+      color: #fff;
+    }
+    .article-content h1 { font-size: 1.8rem; }
+    .article-content h2 {
+      font-size: 1.4rem;
+      padding-bottom: 0.3em;
+      border-bottom: 1px solid rgba(0,0,0,0.08);
+    }
+    .dark .article-content h2 { border-bottom-color: rgba(255,255,255,0.1); }
+    .article-content h3 { font-size: 1.2rem; }
+    .article-content h4 { font-size: 1.05rem; }
+
+    .article-content p {
+      margin: 0.9em 0;
+      letter-spacing: 0.01em;
+    }
+    .article-content strong { font-weight: 700; color: var(--text-main, #1c1917); }
+    .dark .article-content strong { color: #fff; }
+    .article-content em { font-style: italic; }
+    .article-content a {
+      color: #059669;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-decoration-thickness: 1px;
+    }
+    .article-content a:hover { color: #047857; }
+
+    /* 代码：行内 */
+    .article-content code {
+      font-family: 'JetBrains Mono', 'SF Mono', Consolas, 'Courier New', monospace;
+      font-size: 0.88em;
+      background: rgba(0,0,0,0.045);
+      color: #0f766e;
+      padding: 0.18em 0.4em;
+      border-radius: 4px;
+      word-break: break-word;
+    }
+    .dark .article-content code {
+      background: rgba(255,255,255,0.08);
+      color: #5eead4;
+    }
+
+    /* 代码：块 */
+    .article-content pre {
+      position: relative;
+      background: #0f172a;
+      color: #e2e8f0;
+      padding: 1.2em 1.4em;
+      border-radius: 10px;
+      overflow-x: auto;
+      margin: 1.2em 0;
+      font-size: 0.88rem;
+      line-height: 1.7;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    }
+    .article-content pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+      display: block;
+    }
+    .article-content pre::before {
+      content: '代码';
+      position: absolute;
+      top: 0.6em; right: 0.9em;
+      font-size: 0.7rem;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-family: sans-serif;
+    }
+
+    /* 引用块 */
+    .article-content blockquote {
+      margin: 1.2em 0;
+      padding: 0.7em 1.2em;
+      border-left: 4px solid #10b981;
+      background: rgba(16,185,129,0.06);
+      border-radius: 0 8px 8px 0;
+      color: var(--text-main, #1c1917);
+      font-style: italic;
+    }
+    .dark .article-content blockquote {
+      background: rgba(16,185,129,0.1);
+      color: rgba(255,255,255,0.85);
+    }
+    .article-content blockquote p { margin: 0.3em 0; }
+
+    /* 列表 */
+    .article-content ul, .article-content ol {
+      margin: 0.9em 0;
+      padding-left: 1.6em;
+    }
+    .article-content ul { list-style: disc; }
+    .article-content ol { list-style: decimal; }
+    .article-content li { margin: 0.3em 0; }
+    .article-content li > p { margin: 0.2em 0; }
+    .article-content li::marker { color: #10b981; }
+
+    /* 表格 */
+    .article-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.2em 0;
+      font-size: 0.92rem;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+    .article-content th {
+      background: rgba(0,0,0,0.04);
+      font-weight: 600;
+      text-align: left;
+      padding: 0.7em 0.9em;
+      border-bottom: 2px solid rgba(0,0,0,0.12);
+    }
+    .dark .article-content th {
+      background: rgba(255,255,255,0.06);
+      color: #fff;
+      border-bottom-color: rgba(255,255,255,0.15);
+    }
+    .article-content td {
+      padding: 0.65em 0.9em;
+      border-bottom: 1px solid rgba(0,0,0,0.05);
+    }
+    .dark .article-content td { border-bottom-color: rgba(255,255,255,0.06); }
+    .article-content tbody tr:nth-child(even) td {
+      background: rgba(0,0,0,0.018);
+    }
+    .dark .article-content tbody tr:nth-child(even) td {
+      background: rgba(255,255,255,0.02);
+    }
+
+    /* 图片 */
+    .article-content img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      margin: 1.4em auto;
+      border-radius: 10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+      border: 1px solid rgba(0,0,0,0.05);
+    }
+    .dark .article-content img {
+      box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      border-color: rgba(255,255,255,0.08);
+    }
+
+    /* 分隔线 */
+    .article-content hr {
+      margin: 2em 0;
+      border: none;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,0,0,0.15), transparent);
+    }
+    .dark .article-content hr {
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+    }
+
+    /* 行内 code 出现在 pre 里时不被行内样式覆盖 */
+    .article-content pre code { white-space: pre; }
   </style>
 </head>
 <body>

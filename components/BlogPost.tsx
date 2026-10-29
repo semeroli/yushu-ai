@@ -90,18 +90,7 @@ export const BlogPost: React.FC<{ slug: string | null }> = ({ slug }) => {
 
         {/* 正文：管理员编写的 HTML，直接渲染 */}
         <div
-          className="article-content max-w-none text-link dark:text-white/90 leading-relaxed
-            [&_h1]:text-3xl [&_h1]:font-bold [&_h1]:mt-8 [&_h1]:mb-4 [&_h1]:serif-zh
-            [&_h2]:text-2xl [&_h2]:font-bold [&_h2]:mt-8 [&_h2]:mb-3 [&_h2]:serif-zh
-            [&_h3]:text-xl [&_h3]:font-bold [&_h3]:mt-6 [&_h3]:mb-2
-            [&_p]:my-4 [&_p]:text-[1.05rem]
-            [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-4
-            [&_li]:my-1.5
-            [&_a]:text-emerald-600 [&_a]:underline
-            [&_img]:rounded-xl [&_img]:my-6 [&_img]:max-w-full [&_img]:mx-auto [&_img]:border [&_img]:border-black/10 [&_img]:dark:border-white/10
-            [&_blockquote]:border-l-4 [&_blockquote]:border-emerald-500 [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:text-link/70 [&_blockquote]:dark:text-white/70 [&_blockquote]:my-4
-            [&_code]:bg-black/5 [&_code]:dark:bg-white/10 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
-            [&_pre]:bg-black/5 [&_pre]:dark:bg-white/5 [&_pre]:p-4 [&_pre]:rounded-xl [&_pre]:overflow-x-auto [&_pre]:my-4"
+          className="article-content max-w-none"
           dangerouslySetInnerHTML={{ __html: post.content_html }}
         />
       </div>
